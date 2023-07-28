@@ -202,7 +202,6 @@ async def next_page(bot, query):
          [
              InlineKeyboardButton(f'ɪɴꜰᴏ', 'reqinfo'),
              InlineKeyboardButton(f'ᴍᴏᴠɪᴇ', 'minfo'),
-             InlineKeyboardButton(f'sᴇʀɪᴇs', 'sinfo'),
              InlineKeyboardButton(f'ᴛɪᴘs', 'tinfo')
          ]
     )
