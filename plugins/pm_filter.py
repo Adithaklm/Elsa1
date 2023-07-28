@@ -4,6 +4,7 @@ import asyncio
 import re
 import ast
 import math
+import time
 import random
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from Script import script
@@ -31,6 +32,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+
+currentTime = time.strftime("%Dd%Hh%Mm%Ss", time.gmtime(time.time() - BOT_START_TIME))
 
 BUTTONS = {}
 SPELL_CHECK = {}
@@ -516,7 +519,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         )
                     )
                     Joel_tgx = await query.message.reply_text(
-                        script.FILE_MSG.format(query.from_user.mention, title, size),
+                        script.FILE_MSG.format(query.from_user.mention, title, size, currentTime),
                         parse_mode=enums.ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup(
                             [
