@@ -33,7 +33,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-currentTime = time.strftime("%Dd%Hh%Mm%Ss", time.gmtime(time.time() - BOT_START_TIME))
+currentTime = time.strftime("%d Day | %H Hour | %M Min | %S Sec", time.gmtime(time.time() - BOT_START_TIME))
 
 BUTTONS = {}
 SPELL_CHECK = {}
