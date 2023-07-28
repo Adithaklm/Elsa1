@@ -271,10 +271,10 @@ Elsa
 <b>Rᴇǫ : {}</b> 
 
 <code>{}</code>
-
+------------------------
 <b>ᴛʜɪs ғɪʟᴇ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴛʜɪs ɢʀᴏᴜᴘ ᴡɪᴛʜɪɴ 2 ᴍɪɴᴜᴛᴇs ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ</b>
 
-⏩ How To Forward : <a href=https://t.me/TelegramTips/102>Click Here</a>"""
+⏩ <b>How To Forward : <a href=https://t.me/TelegramTips/102>Click Here</a></b>"""
     SUR_TXT = """
 <b>
 𝙷𝙴𝙻𝙻𝙾 {},
