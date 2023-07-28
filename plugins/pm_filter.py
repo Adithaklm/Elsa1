@@ -193,11 +193,6 @@ async def next_page(bot, query):
                 ]
                 for file in files
         ]
-    btn.insert(0, 
-        [
-            InlineKeyboardButton(f' ♀️ {search} ♀️ ', 'qinfo')
-        ]
-    )
     btn.insert(1, 
          [
              InlineKeyboardButton(f'ɪɴꜰᴏ', 'reqinfo'),
@@ -1239,16 +1234,10 @@ async def auto_filter(client, msg, spoll=False):
                 ]
                 for file in files
             ]
-    btn.insert(0, 
-        [
-            InlineKeyboardButton(f' ♀️ {search} ♀️ ', 'qinfo')
-        ]
-    )
     btn.insert(1, 
          [
              InlineKeyboardButton(f'ɪɴꜰᴏ', 'reqinfo'),
              InlineKeyboardButton(f'ᴍᴏᴠɪᴇ', 'minfo'),
-             InlineKeyboardButton(f'sᴇʀɪᴇs', 'sinfo'),
              InlineKeyboardButton(f'ᴛɪᴘs', 'tinfo')
          ]
     )
