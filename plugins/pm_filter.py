@@ -511,15 +511,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         caption=script.CHANNEL_CAP.format(query.from_user.mention, title, query.message.chat.title),
                         protect_content=True if ident == "filep" else False,
                         reply_markup=InlineKeyboardMarkup(
-                        buttons = [[
-                            InlineKeyboardButton('mal', callback_data='minfo'), 
-                            InlineKeyboardButton('hin', callback_data='reqinfo'), 
-                            InlineKeyboardButton('tam', callback_data='gxneopm')
-                        ], [
-                            InlineKeyboardButton('join main channel', url='https://t.me/cenEma9')
-                        ]]
-                        ) 
-                    ) 
+                            [
+                                [
+                                    InlineKeyboardButton("ᴊᴏɪɴ ᴍᴀɪɴ ᴄʜᴀɴɴᴇʟ", url='https://t.me/cenEma9')
+                                ]
+                            ]
+                        )
+                    )
                     Joel_tgx = await query.message.reply_text(
                         script.FILE_MSG.format(query.from_user.mention, title, size, currentTime),
                         parse_mode=enums.ParseMode.HTML,
