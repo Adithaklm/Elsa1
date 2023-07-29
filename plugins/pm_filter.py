@@ -643,7 +643,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('👨‍🔧 Oᴡɴᴇʀ', switch_inline_query_current_chat=''),
             InlineKeyboardButton('🎬 Cʜᴀɴɴᴇʟ', url='https://t.me/CmRips')
         ], [
-            InlineKeyboardButton('👥 Gʀᴏᴜᴘ', utl='https://t.me/cenEma9'),
+            InlineKeyboardButton('👥 Gʀᴏᴜᴘ', url='https://t.me/cenEma9'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='about')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
