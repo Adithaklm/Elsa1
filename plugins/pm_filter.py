@@ -517,7 +517,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                             InlineKeyboardButton('tam', callback_data='gxneopm')
                         ], [
                             InlineKeyboardButton('join main channel', url='https://t.me/cenEma9')
-                        ]])) 
+                        ]]
+                        ) 
+                    ) 
                     Joel_tgx = await query.message.reply_text(
                         script.FILE_MSG.format(query.from_user.mention, title, size, currentTime),
                         parse_mode=enums.ParseMode.HTML,
