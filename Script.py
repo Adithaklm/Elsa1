@@ -79,16 +79,14 @@ Sᴏʀʀʏ ɪ ᴏɴʟʏ ᴡᴏʀᴋ ᴏɴ <a href=https://t.me/+eYWwkNUAKIQzMzNl
 • /disconnect  - <code>disconnect from a chat</code>
 • /connections - <code>list all your connections</code>"""
 
-    EXTRAMOD_TXT = """Help: <b>Extra Modules</b>
+    EXTRAMOD_TXT = """<b>⍟───[🤴 ʙᴏᴛ ᴅᴇᴠ ᴅᴇᴛᴀɪʟs 🤴]───⍟
+👒 ᴏᴡɴᴇʀ ɴᴀᴍᴇ : Dᴇᴠɪɴ
+🍁 ᴜsᴇʀɴᴀᴍᴇ : @GxToS
+🍃 ᴘᴇʀᴍᴀɴᴇɴᴛ ᴅᴍ ʟɪɴᴋ : <a href=https://t.me/my_devs>ᴄʟɪᴄᴋ ʜᴇʀᴇ</a>
 
-<b>NOTE:</b>
-these are the extra features of Elsa
-
-<b>Commands and Usage:</b>
-• /id - <code>get id of a specified user.</code>
-• /info  - <code>get information about a user.</code>
-• /imdb  - <code>get the film information from IMDb source.</code>
-• /search  - <code>get the film information from various sources.</code>"""
+🇮🇳 ʟᴀɴɢᴜᴀɢᴇ : ᴇɴɢʟɪsʜ , ᴍᴀʟᴀʏᴀʟᴀᴍ
+му нєαяt ιѕ α ѕtєяισ 📻,
+ιt'ѕ вєαtѕ fσя уσυ ѕσ ℓιѕtєn ¢ℓσѕє💔</b>"""
 
     SONG_TXT = """<b>𝚂𝙾𝙽𝙶 𝙳𝙾𝚆𝙽𝙻𝙾𝙰𝙳 𝙼𝙾𝙳𝚄𝙻𝙴</b>
 
