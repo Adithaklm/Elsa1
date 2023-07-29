@@ -622,7 +622,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "surprise":
         btn = [[
-            InlineKeyboardButton('sᴜʀᴘʀɪsᴇ', callback_data='start')
+            InlineKeyboardButton('💢 Cʟɪᴄᴋ Tᴏ Vɪᴇᴡ Mᴏʀᴇ Bᴜᴛᴛᴏɴs 💢', callback_data='start')
         ]]
         reply_markup=InlineKeyboardMarkup(btn)
         await client.edit_message_media(
@@ -638,13 +638,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "start":
         buttons = [[
-            InlineKeyboardButton('🔕 ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴏsᴇ ᴛʜɪs ʙᴜᴛᴛᴏɴs 🔕', callback_data='start')
+            InlineKeyboardButton('🔕 Cʟɪᴄᴋ Tᴏ Vʟᴏsᴇ Mʜɪs Bᴜᴛᴛᴏɴs 🔕', callback_data='surprise')
         ], [
-            InlineKeyboardButton('👨‍🔧 Oᴡɴᴇʀ', switch_inline_query_current_chat=''),
+            InlineKeyboardButton('👨‍🔧 Oᴡɴᴇʀ', callback_data='extra'),
             InlineKeyboardButton('🎬 Cʜᴀɴɴᴇʟ', url='https://t.me/CmRips')
         ], [
             InlineKeyboardButton('👥 Gʀᴏᴜᴘ', url='https://t.me/cenEma9'),
-            InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='about')
+            InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await client.edit_message_media(
