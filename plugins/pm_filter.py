@@ -640,11 +640,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         buttons = [[
             InlineKeyboardButton('🔕 ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴏsᴇ ᴛʜɪs ʙᴜᴛᴛᴏɴs 🔕', callback_data='start')
         ], [
-            InlineKeyboardButton('🔍 sᴇᴀʀᴄʜ', switch_inline_query_current_chat=''),
-            InlineKeyboardButton('ᴏᴡɴ ɪɴғᴏ', url='https://t.me/+ipDgG7Qfrps1ZTJl')
+            InlineKeyboardButton('👨‍🔧 Oᴡɴᴇʀ', switch_inline_query_current_chat=''),
+            InlineKeyboardButton('🎬 Cʜᴀɴɴᴇʟ', url='https://t.me/CmRips')
         ], [
-            InlineKeyboardButton('ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('ᴀʙᴏᴜᴛ', callback_data='about')
+            InlineKeyboardButton('👥 Gʀᴏᴜᴘ', utl='https://t.me/cenEma9'),
+            InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='about')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await client.edit_message_media(
