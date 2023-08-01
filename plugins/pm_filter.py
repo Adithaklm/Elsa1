@@ -50,9 +50,6 @@ TIME_DURATION_UNITS = (
     ("sec", 1),
 )
 
-current_time = datetime.utcnow()
-uptime_sec = (current_time - START_TIME).total_seconds() 
-uptime = _human_time_duration(int(uptime_sec))
 
 async def _human_time_duration(seconds):
     if seconds == 0:
