@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 currentTime = time.strftime("%d Day | %H Hour | %M Min | %S Sec", time.gmtime(time.time() - BOT_START_TIME))
+time_zone = pytz.timezone('Asia/Kolkata')
+current_datetime = datetime.datetime.now(time_zone)
+current_date = current_datetime.strftime('%d-%m-%Y')
+current_day = calendar.day_name[current_datetime.weekday()]
+current_time = current_datetime.strftime('%I:%M:%S %p')
 
 BUTTONS = {}
 SPELL_CHECK = {}
