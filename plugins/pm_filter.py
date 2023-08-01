@@ -518,7 +518,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                               InlineKeyboardButton("🇮🇳 Hɪɴ", callback_data='gxneopm'), 
                               InlineKeyboardButton("🇮🇶 Aʀʙ", callback_data='gxneopm')   
                            ],[
-                              InlineKeyboardButton("ᴊᴏɪɴ ᴏᴜʀ ᴍᴀɪɴ ᴄʜᴀɴɴᴇʟ", url='https://t.mᴄʜᴀɴɴᴇa9')   
+                              InlineKeyboardButton("Jᴏɪɴ Oᴜʀ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url='https://t.me/cenEma9')   
                              ]
                             ]
                         )
