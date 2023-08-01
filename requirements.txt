@@ -22,7 +22,6 @@ PyPDF2
 ujson
 pyshorteners
 countryinfo
-datetime
 pytz
 dnspython==2.3.0
 aiohttp
