@@ -49,7 +49,16 @@ TIME_DURATION_UNITS = (
     ("sec", 1),
 )
 
-
+async def _human_time_duration(seconds):
+    if seconds == 0:
+        return "inf"
+    parts = []
+    for unit, div in TIME_DURATION_UNITS:
+        amount, seconds = divmod(int(seconds), div)
+        if amount > 0:
+            parts.append(f'{amount} {unit}{"" if amount == 1 else "s"}')
+    return ", ".join(parts)
+    
 @Client.on_message(filters.command('autofilter') & filters.user(ADMINS))
 async def fil_mod(client, message): 
       mode_on = ["yes", "on", "true"]
