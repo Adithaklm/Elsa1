@@ -27,7 +27,7 @@ async def _human_time_duration(seconds):
 
 
 
-@Client.on_message(filters.command("uptime"))
+@Client.on_message(filters.command("fuck"))
 async def ping_pong(client, message):
     current_time = datetime.utcnow()
     uptime_sec = (current_time - START_TIME).total_seconds()
