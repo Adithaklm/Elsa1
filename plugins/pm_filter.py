@@ -5,9 +5,7 @@ import re
 import ast 
 import math
 import time
-import pytz
 import random
-import datetime, calendar
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from Script import script
 import pyrogram
@@ -36,16 +34,15 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-currentTime = time.strftime("%d Day | %H Hour | %M Min | %S Sec", time.gmtime(time.time() - BOT_START_TIME))
-time_zone = pytz.timezone('Asia/Kolkata')
-current_datetime = datetime.datetime.now(time_zone)
-current_date = current_datetime.strftime('%d-%m-%Y')
-current_day = calendar.day_name[current_datetime.weekday()]
-current_time = current_datetime.strftime('%I:%M:%S %p')
 
 BUTTONS = {}
 SPELL_CHECK = {}
 FILTER_MODE = {}
+
+
+@Client.on_message(filters.private & filters.command("adith") & filters.user(ADMINS))          
+async def stats(bot, update):
+    currentTime = time.strftime("%Dd%Hh%Mm%Ss", time.gmtime(time.time() - BOT_START_TIME))
 
 @Client.on_message(filters.command('autofilter') & filters.user(ADMINS))
 async def fil_mod(client, message): 
