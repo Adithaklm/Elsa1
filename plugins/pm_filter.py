@@ -544,10 +544,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         )
                     )
                     Joel_tgx = await query.message.reply_text(
-                        script.FILE_MSG.format(query.from_user.mention, title, size, uptime),
                         current_time = datetime.utcnow(), 
                         uptime_sec = (current_time - START_TIME).total_seconds(), 
                         uptime = await _human_time_duration(int(uptime_sec)), 
+                        script.FILE_MSG.format(query.from_user.mention, title, size, uptime),                        
                         parse_mode=enums.ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup(
                             [
