@@ -1,5 +1,5 @@
-from datetime import datetime
-from time import time
+import datetime
+import time
 
 from pyrogram import filters, Client
 
