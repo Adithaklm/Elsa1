@@ -527,10 +527,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             else:
                 if clicked == typed:
                     file_send=await client.send_cached_media(
-                        chat_id=FILE_CHANNEL,
-                        current_time = datetime.utcnow(), 
-                        uptime_sec = (current_time - START_TIME).total_seconds(), 
-                        uptime = await _human_time_duration(int(uptime_sec)), 
+                        chat_id=FILE_CHANNEL,                        
                         file_id=file_id,
                         caption=script.CHANNEL_CAP.format(query.from_user.mention, title, query.message.chat.title),
                         protect_content=True if ident == "filep" else False,
@@ -546,7 +543,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
                             ]
                         )
                     )
-                    Joel_tgx = await query.message.reply_text(                        
+                    Joel_tgx = await query.message.reply_text( 
+                        current_time = datetime.utcnow(), 
+                        uptime_sec = (current_time - START_TIME).total_seconds(), 
+                        uptime = await _human_time_duration(int(uptime_sec)), 
                         script.FILE_MSG.format(query.from_user.mention, title, size, uptime),                        
                         parse_mode=enums.ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup(
