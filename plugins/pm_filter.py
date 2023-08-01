@@ -514,9 +514,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         reply_markup=InlineKeyboardMarkup(
                             [
                              [
-                              InlineKeyboardButton("🇮🇳 Mᴀʟ", callback_data='gxneopm'), 
-                              InlineKeyboardButton("🇮🇳 Hɪɴ", callback_data='gxneopm'), 
-                              InlineKeyboardButton("🇮🇶 Aʀʙ", callback_data='gxneopm')   
+                              InlineKeyboardButton("🇮🇳 Mᴀʟ", callback_data='btmal'), 
+                              InlineKeyboardButton("🇮🇳 Hɪɴ", callback_data='bthin'), 
+                              InlineKeyboardButton("🇮🇶 Aʀʙ", callback_data='btarb')   
                            ],[
                               InlineKeyboardButton("Jᴏɪɴ Oᴜʀ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url='https://t.me/cenEma9')   
                              ]
@@ -615,6 +615,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "gxneopm":
         await query.answer("📵 ᴄᴏɴᴛᴀᴄᴛ ɴᴏᴛ ᴀʟʟᴏᴡᴇᴅ\n\n- ꜱᴇᴄᴛɪᴏɴ B206 - ꜱᴘᴀᴍ + ʙᴀɴ ⚠️\n\n- ꜱᴇᴄᴛɪᴏɴ Y8R6 - ꜱᴘᴀᴍ + ʀᴇᴘᴏʀᴛ 🉐\n\n🗽 ʙʏ Dᴇᴠɪɴ' [Oғғʟɪɴᴇ]", show_alert=True)
+
+    elif query.data == "btmal":
+        await query.answer("പകർപ്പവകാശ പ്രശ്‌നങ്ങൾ കാരണം ഈ ഫയൽ ഈ ഗ്രൂപ്പിൽ നിന്ന് 2 മിനിറ്റിനുള്ളിൽ ഇല്ലാതാക്കപ്പെടും", show_alert=True)
+
+    elif query.data == "bthin":
+        await query.answer("कॉपीराइट मुद्दों के कारण यह फ़ाइल 2 मिनट के भीतर इस समूह से हटा दी जाएगी", show_alert=True)
+
+    elif query.data == "btarb":
+        await query.answer("سيتم حذف هذا الملف من هذه المجموعة في غضون دقيقتين بسبب قضايا حقوق النشر", show_alert=True)
     
     elif query.data == "reqinfo":
         await query.answer("⚠ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ ⚠\n\nᴀꜰᴛᴇʀ 10 ᴍɪɴᴜᴛᴇꜱ ᴛʜɪꜱ ᴍᴇꜱꜱᴀɢᴇ ᴡɪʟʟ ʙᴇ ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ ᴅᴇʟᴇᴛᴇᴅ\n\nɪꜰ ʏᴏᴜ ᴅᴏ ɴᴏᴛ ꜱᴇᴇ ᴛʜᴇ ʀᴇǫᴜᴇsᴛᴇᴅ ᴍᴏᴠɪᴇ / sᴇʀɪᴇs ꜰɪʟᴇ, ʟᴏᴏᴋ ᴀᴛ ᴛʜᴇ ɴᴇxᴛ ᴘᴀɢᴇ\n\n❣ ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴄɪɴᴇᴍᴀʟᴀ.ᴄᴏᴍ", show_alert=True)
