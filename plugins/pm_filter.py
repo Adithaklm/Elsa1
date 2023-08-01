@@ -39,10 +39,16 @@ BUTTONS = {}
 SPELL_CHECK = {}
 FILTER_MODE = {}
 
+START_TIME = datetime.utcnow()
+START_TIME_ISO = START_TIME.replace(microsecond=0).isoformat()
+TIME_DURATION_UNITS = (
+    ("week", 60 * 60 * 24 * 7),
+    ("day", 60**2 * 24),
+    ("hour", 60**2),
+    ("min", 60),
+    ("sec", 1),
+)
 
-@Client.on_message(filters.private & filters.command("adith") & filters.user(ADMINS))          
-async def stats(bot, update):
-    currentTime = time.strftime("%Dd%Hh%Mm%Ss", time.gmtime(time.time() - BOT_START_TIME))
 
 @Client.on_message(filters.command('autofilter') & filters.user(ADMINS))
 async def fil_mod(client, message): 
