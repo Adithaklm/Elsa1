@@ -50,6 +50,10 @@ TIME_DURATION_UNITS = (
     ("sec", 1),
 )
 
+current_time = datetime.utcnow()
+uptime_sec = (current_time - START_TIME).total_seconds() 
+uptime = await _human_time_duration(int(uptime_sec))
+
 async def _human_time_duration(seconds):
     if seconds == 0:
         return "inf"
@@ -543,10 +547,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                             ]
                         )
                     )
-                    Joel_tgx = current_time = datetime.utcnow(), 
-                               uptime_sec = (current_time - START_TIME).total_seconds(), 
-                               uptime = await _human_time_duration(int(uptime_sec)), 
-                        await query.message.reply_text(                         
+                    Joel_tgx = await query.message.reply_text(                         
                         script.FILE_MSG.format(query.from_user.mention, title, size, uptime),                        
                         parse_mode=enums.ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup(
