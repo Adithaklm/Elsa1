@@ -544,6 +544,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                             ]
                         )
                     )
+                    current_time = datetime.utcnow()
+                    uptime_sec = (current_time - START_TIME).total_seconds()
+                    uptime = await _human_time_duration(int(uptime_sec))
                     Joel_tgx = await query.message.reply_text(                         
                         parse_mode=enums.ParseMode.HTML,
                         current_time = datetime.utcnow(), 
