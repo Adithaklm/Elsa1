@@ -560,6 +560,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                              ]
                             ]
                         )
+                        
                     )
                     if settings['auto_delete']:
                         await asyncio.sleep(300)
