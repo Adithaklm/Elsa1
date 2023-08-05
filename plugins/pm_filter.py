@@ -556,8 +556,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                               InlineKeyboardButton('📥 ᴍᴏᴠɪᴇ ᴅᴏᴡɴʟᴏᴀᴅ ʟɪɴᴋ 📥 ', url = file_send.link)
                              ]
                             ]
-                        )
-                        
+                        )                        
                     )
                     if settings['auto_delete']:
                         await asyncio.sleep(300)
