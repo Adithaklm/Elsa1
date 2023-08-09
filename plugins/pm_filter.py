@@ -138,7 +138,12 @@ async def pm_text(bot, message):
     user = message.from_user.first_name
     user_id = message.from_user.id
     if content.startswith("/") or content.startswith("#"): return  # ignore commands and hashtags
-    await message.reply_text("<b>Your message has been sent to my moderators !</b>")
+    btn = [[
+            InlineKeyboardButton('🔍 Mᴏᴠɪᴇs Rᴇǫᴜᴇsᴛ Gʀᴏᴜᴘ 🔎', url=f'https://t.me/+InYOms8kz9kyMjM1')            
+        ]]           
+    sui=await message.reply_photo(photo="https://graph.org/file/339f8a1457d09d25b150a.jpg", caption=script.SPELL_CHECK_MAYR.format(user), reply_markup=InlineKeyboardMarkup(btn))               
+    await asyncio.sleep(60)
+    await sui.delete()
     await bot.send_message(
         chat_id=LOG_CHANNEL,
         text=f"<b>#PM_MSG\n\nName : {user}\n\nID : {user_id}\n\nMessage : {content}</b>"
