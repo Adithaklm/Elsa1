@@ -547,6 +547,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     current_time = datetime.utcnow()
                     uptime_sec = (current_time - START_TIME).total_seconds()
                     uptime = await _human_time_duration(int(uptime_sec))
+                    await query.answer(f'നിങ്ങൾ റിക്യുസ്റ്റ് ചെയ്ത ഫയൽ ചാനലിൽ അപ്ലോഡ് ആക്കിയിട്ടുണ്ട്\n\n🤔 മനസിലായില്ലങ്കിൽ #CM007 ഇങ്ങനെ ഗ്രൂപ്പിൽ SEND ചെയ്യുക\n\nClick @ Button - On Bottom Right Side', show_alert=True)                 
                     Joel_tgx = await query.message.reply_text(  
                         script.FILE_MSG.format(query.from_user.mention, title, size, uptime),
                         parse_mode=enums.ParseMode.HTML,                                                                        
