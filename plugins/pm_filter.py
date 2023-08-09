@@ -564,7 +564,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         await Joel_tgx.delete()
                         await file_send.delete()
                 else:
-                    await query.answer(f"Hᴇʏ {query.from_user.first_name}, Tʜɪs Is Nᴏᴛ Yᴏᴜʀ Mᴏᴠɪᴇ Rᴇǫᴜᴇsᴛ. Rᴇǫᴜᴇsᴛ Yᴏᴜʀ's !", show_alert=True)
+                    await query.answer(f"അല്ലയോ {query.from_user.first_name} അങ്ങുന്നേ... സ്വന്തമായി റിക്യുസ്റ്റ് ചെയ്താലും 🤒\n\nRᴇǫᴜᴇsᴛ Yᴏᴜʀ Oᴡɴ Fɪʟᴇ, Dᴏɴ'ᴛ Cʟɪᴄᴋ Oᴛʜᴇʀ Rᴇᴏ̨ᴜᴇsᴛᴇᴅ Fɪʟᴇs 🤦‍♂", show_alert=True)
                 await query.answer('Cʜᴇᴄᴋ PM, I ʜᴀᴠᴇ sᴇɴᴛ ғɪʟᴇs ɪɴ PM', show_alert=True)
         except UserIsBlocked:
             await query.answer('𝐔𝐧𝐛𝐥𝐨𝐜𝐤 𝐭𝐡𝐞 𝐛𝐨𝐭 𝐦𝐚𝐡𝐧 !', show_alert=True)
