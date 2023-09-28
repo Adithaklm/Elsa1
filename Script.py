@@ -279,18 +279,18 @@ Elsa
 
 Sᴏʀʀʏ ɪ ᴏɴʟʏ ᴡᴏʀᴋ ᴏɴ <a href=https://t.me/+eYWwkNUAKIQzMzNl>CɪɴᴇᴍᴀCᴏᴍᴘᴀɴʏ</a> Gʀᴏᴜᴘ. Nᴏ ᴏᴛʜᴇʀ ᴄᴏᴍᴍᴀɴᴅ ᴡɪʟʟ ᴡᴏʀᴋ ᴏɴ ᴛʜɪs ʙᴏᴛ ᴇxᴄᴇᴘᴛ sᴛᴀʀᴛ. ᴅᴏɴ’ᴛ ᴡᴀsᴛᴇ ʏᴏᴜʀ ᴛɪᴍᴇ</b>"""
  
-    IMDB_TEMPLATE_TXT = """
-<b>🔖 ᴛɪᴛʟᴇ :<a href={url}>{title}</a>
+    IMDB_TEMPLATE_TXT = """"🪁 <b>Tɪᴛɪʟᴇ :  <a href={url}>{title}</a></b>
 
-🎭 ɢᴇɴʀᴇs : {genres}
-🎖 ʀᴀᴛɪɴɢ : <a href={url}/ratings>{rating}</a> / 10 (ʙᴀsᴇᴅ ᴏɴ {votes} ᴜsᴇʀ ʀᴀᴛɪɴɢ.)
-
-📆 ʏᴇᴀʀ : {release_date}
-🗞 ʟᴀɴɢᴜᴀɢᴇ : {languages}
-🌎 ᴄᴏᴜɴᴛʀʏ : {countries}
-
-©{message.chat.title}</b>
-"""
+    📋 <b>ɪɴғᴏ</b> : <code>{release_date}</code>
+    
+    🌟 <b>Rᴀᴛɪɴɢ : {rating} / 10 </b>\n<code>({rating} based on {votes} user ratings)</code>
+    
+    🎭 <b>Gᴇɴʀᴇ :  <a href={url}>{genres}</a></b>
+    
+    🎙 <b>Lᴀɴɢᴜᴀɢᴇ</b> : <code>{languages}</code>
+    🏜 <b>Cᴏᴜɴᴛʀʏ</b> : <code>{countries}</code>
+    
+    <b><i>▣ ᴘᴏᴡᴇʀᴇᴅ ʙʏ  <a href=https://t.me/film_hous>CɪɴᴇᴍᴀCᴏᴍᴘᴀɴʏ</a> </i></b>"""
 
     CUSTOM_FILE_CAPTION = """<b>📂Fɪʟᴇɴᴀᴍᴇ : {file_name}
 
