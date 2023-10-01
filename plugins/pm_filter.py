@@ -666,6 +666,25 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "tinfo":
         await query.answer("▣ ᴛɪᴘs ▣\n\n★ ᴛʏᴘᴇ ᴄᴏʀʀᴇᴄᴛ sᴘᴇʟʟɪɴɢ (ɢᴏᴏɢʟᴇ)\n\n★ ɪғ ʏᴏᴜ ɴᴏᴛ ɢᴇᴛ ʏᴏᴜʀ ғɪʟᴇ ɪɴ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ᴛʜᴇɴ ᴛʜᴇ ɴᴇxᴛ sᴛᴇᴘ ɪs ᴄʟɪᴄᴋ ɴᴇxᴛ ʙᴜᴛᴛᴏɴ.\n\n★ ᴄᴏɴᴛɪɴᴜᴇ ᴛʜɪs ᴍᴇᴛʜᴏᴅ ᴛᴏ ɢᴇᴛᴛɪɴɢ ʏᴏᴜ ғɪʟᴇ\n\n© CɪɴᴇᴍᴀCᴏᴍᴘᴀɴʏ", show_alert=True)
 
+    elif query.data == "datea":
+        time_zone = pytz.timezone('Asia/Kolkata')
+        current_datetime = datetime.now(time_zone)
+        current_date = current_datetime.strftime('%d-%m-%Y')
+        current_day = calendar.day_name[current_datetime.weekday()]
+        current_time = current_datetime.strftime('%I:%M:%S %p')
+        current_time = datetime.utcnow()
+        uptime_sec = (current_time - START_TIME).total_seconds()
+        uptime = await _human_time_duration(int(uptime_sec))
+        await query.answer(f"📆 Dᴀᴛᴇ : {current_date}\n\n⏳ Uᴘᴛɪᴍᴇ : {uptime}\n\n©CɪɴᴇᴍᴀCᴏᴍᴘᴀɴʏ", show_alert=True)
+        
+    elif query.data == "toime":
+        time_zone = pytz.timezone('Asia/Kolkata')
+        current_datetime = datetime.now(time_zone)
+        current_date = current_datetime.strftime('%d-%m-%Y')
+        current_day = calendar.day_name[current_datetime.weekday()]
+        current_time = current_datetime.strftime('%I:%M:%S %p')
+        await query.answer(f"⏰ Tɪᴍᴇ : {current_time}\n\n⛅ Wᴇᴇᴋᴅᴀʏ : {current_day}\n\n©CɪɴᴇᴍᴀCᴏᴍᴘᴀɴʏ", show_alert=True)
+    
     elif query.data == "surprise":
         btn = [[
             InlineKeyboardButton('💢 Cʟɪᴄᴋ Tᴏ Vɪᴇᴡ Mᴏʀᴇ Bᴜᴛᴛᴏɴs 💢', callback_data='start')
