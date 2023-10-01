@@ -604,3 +604,16 @@ async def shortlink(bot, message):
     await save_group_settings(grpid, 'shortlink_api', api)
     await save_group_settings(grpid, 'is_shortlink', True)
     await reply.edit_text(f"<b>Successfully added shortlink API for {title}.\n\nCurrent Shortlink Website: <code>{shortlink_url}</code>\nCurrent API: <code>{api}</code></b>")
+
+@Client.on_message(filters.command("alrm007") & filters.incoming)
+async def start(client, message):
+    if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+        buttons = [
+            [
+                InlineKeyboardButton('⏰ ᴛɪᴍᴇ', callback_data='toime'), 
+                InlineKeyboardButton('📅 ᴅᴀᴛᴇ', callback_data='datea')
+            ]
+            ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await message.reply(script.DATE_TXT.format(message.from_user.mention if message.from_user else message.chat.title, temp.U_NAME, temp.B_NAME), reply_markup=reply_markup)
+        await asyncio.sleep(2)
