@@ -606,7 +606,7 @@ async def shortlink(bot, message):
     await reply.edit_text(f"<b>Successfully added shortlink API for {title}.\n\nCurrent Shortlink Website: <code>{shortlink_url}</code>\nCurrent API: <code>{api}</code></b>")
 
 @Client.on_message(filters.command("alrm007") & filters.incoming)
-async def start(client, message):
+async def daye(client, message):
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         buttons = [
             [
