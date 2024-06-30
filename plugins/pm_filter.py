@@ -138,7 +138,7 @@ async def pm_text(bot, message):
     user_id = message.from_user.id
     if content.startswith("/") or content.startswith("#"): return  # ignore commands and hashtags
     btn = [[
-            InlineKeyboardButton('🔍 Mᴏᴠɪᴇs Rᴇǫᴜᴇsᴛ Gʀᴏᴜᴘ 🔎', url=f'https://t.me/+InYOms8kz9kyMjM1')            
+            InlineKeyboardButton('🔍 Mᴏᴠɪᴇs Rᴇǫᴜᴇsᴛ Gʀᴏᴜᴘ 🔎', url=f'https://t.me/+YlvAdLTfTDJiZTM1')            
         ]]           
     sui=await message.reply_photo(photo="https://graph.org/file/339f8a1457d09d25b150a.jpg", caption=script.SPELL_CHECK_MAYR.format(user), reply_markup=InlineKeyboardMarkup(btn))               
     await asyncio.sleep(60)
