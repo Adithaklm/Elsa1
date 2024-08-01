@@ -236,11 +236,13 @@ This module only works for my admins
 • /send - <code>Send any message through bot to users. /send (username/userid) reply with message </code>
 • /deletefiles - <code>Delete CamRip and PreDvD files delete from database </code>"""
     
-    STATUS_TXT = """<b>• 𝖳𝗈𝗍𝖺𝗅 𝖥𝗂𝗅𝖾𝗌: <code>{}</code>
-• 𝖳𝗈𝗍𝖺𝗅 𝖴𝗌𝖾𝗋𝗌: <code>{}</code>
-• 𝖳𝗈𝗍𝖺𝗅 𝖢𝗁𝖺𝗍𝗌: <code>{}</code>
-• 𝖴𝗌𝖾𝖽 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: <code>{}</code>
-• 𝖥𝗋𝖾𝖾 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: <code>{}</code></b>"""
+    STATUS_TXT = """<b>• 𝖳𝗈𝗍𝖺𝗅 𝖥𝗂𝗅𝖾𝗌: {}
+• 𝖳𝗈𝗍𝖺𝗅 𝖴𝗌𝖾𝗋𝗌: {}
+• 𝖳𝗈𝗍𝖺𝗅 𝖢𝗁𝖺𝗍𝗌: {}
+• 𝖴𝗌𝖾𝖽 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: {}
+• 𝖥𝗋𝖾𝖾 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: {}</b>
+
+<blockquote>“𝖶𝗂𝗍𝗁𝗈𝗎𝗍 𝖺 𝗌𝗒𝗌𝗍𝖾𝗆𝖺𝗍𝗂𝖼 𝗐𝖺𝗒 𝗍𝗈 𝗌𝗍𝖺𝗋𝗍 𝖺𝗇𝖽 𝗄𝖾𝖾𝗉 𝖽𝖺𝗍𝖺 𝖼𝗅𝖾𝖺𝗇, 𝖻𝖺𝖽 𝖽𝖺𝗍𝖺 𝗐𝗂𝗅𝗅 𝗁𝖺𝗉𝗉𝖾𝗇.” — 𝖣𝗈𝗇𝖺𝗍𝗈 𝖣𝗂𝗈𝗋𝗂𝗈</blockquote>"""
 
     CARB_TXT = """<b>Help</b> : 𝗖𝗔𝗥𝗕𝗢𝗡
 𝙲𝙰𝚁𝙱𝙾𝙽 𝙸𝚂 𝙰 𝙵𝙴𝚄𝚃𝚄𝚁𝙴 𝚃𝙾 𝙼𝙰𝙺𝙴 𝚃𝙷𝙴 𝙸𝙼𝙰𝙶𝙴 𝙰𝚂 𝚂𝙷𝙾𝚆𝙽 𝙸𝙽 𝚃𝙷𝙴 𝚃𝙾𝙿 𝚆𝙸𝚃𝙷 𝚈𝙾𝚄𝚁𝙴 𝚃𝙴𝚇𝚃𝚂.
