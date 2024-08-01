@@ -236,11 +236,11 @@ This module only works for my admins
 • /send - <code>Send any message through bot to users. /send (username/userid) reply with message </code>
 • /deletefiles - <code>Delete CamRip and PreDvD files delete from database </code>"""
     
-    STATUS_TXT = """<b>• 𝖳𝗈𝗍𝖺𝗅 𝖥𝗂𝗅𝖾𝗌: {}
+    STATUS_TXT = """• 𝖳𝗈𝗍𝖺𝗅 𝖥𝗂𝗅𝖾𝗌: {}
 • 𝖳𝗈𝗍𝖺𝗅 𝖴𝗌𝖾𝗋𝗌: {}
 • 𝖳𝗈𝗍𝖺𝗅 𝖢𝗁𝖺𝗍𝗌: {}
 • 𝖴𝗌𝖾𝖽 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: {}
-• 𝖥𝗋𝖾𝖾 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: {}</b>
+• 𝖥𝗋𝖾𝖾 𝖲𝗍𝗈𝗋𝖺𝗀𝖾: {}
 
 <blockquote>“𝖶𝗂𝗍𝗁𝗈𝗎𝗍 𝖺 𝗌𝗒𝗌𝗍𝖾𝗆𝖺𝗍𝗂𝖼 𝗐𝖺𝗒 𝗍𝗈 𝗌𝗍𝖺𝗋𝗍 𝖺𝗇𝖽 𝗄𝖾𝖾𝗉 𝖽𝖺𝗍𝖺 𝖼𝗅𝖾𝖺𝗇, 𝖻𝖺𝖽 𝖽𝖺𝗍𝖺 𝗐𝗂𝗅𝗅 𝗁𝖺𝗉𝗉𝖾𝗇.” — 𝖣𝗈𝗇𝖺𝗍𝗈 𝖣𝗂𝗈𝗋𝗂𝗈</blockquote>"""
 
