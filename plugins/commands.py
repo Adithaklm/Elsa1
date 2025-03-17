@@ -17,6 +17,7 @@ import base64
 logger = logging.getLogger(__name__)
 
 BATCH_FILES = {}
+AUTH_CHANNEL = '-1002426169349'
 
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
