@@ -9,7 +9,14 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow.exceptions import ValidationError
 from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_BTN
+# ... other imports
 
+def fuzzy_filter(query, file_list, n=5, cutoff=0.7):
+    names = [f.file_name for f in file_list]
+    close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
+    return [f for f in file_list if f.file_name in close]
+
+# ... rest of your code
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
