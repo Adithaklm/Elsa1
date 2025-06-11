@@ -69,19 +69,25 @@ async def save_file(media):
 
 
 
-async def get_search_results(query, file_type=None, max_results=20, offset=0, filter=False):
-    # First, use text search for speed
-    filter_query = {'$text': {'$search': query}}
+async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
+    # 1. Phrase search (fast and fairly accurate)
+    filter_query = {'$text': {'$search': f"\"{query}\""}}
     if file_type:
         filter_query['file_type'] = file_type
-    cursor = Media.find(filter_query)
-    cursor.skip(offset).limit(max_results)
-    files = await cursor.to_list(length=max_results)
-    
-    # Then, filter for more exact matches
-    exact_files = [f for f in files if query.lower() in f.file_name.lower()]
-    # If not enough exact matches, return all text search results (fallback)
-    return exact_files if exact_files else files, offset + max_results, len(files)
+    results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
+    # 2. Post-filter for exact match
+    exact = [f for f in results if f.file_name.lower().strip() == query.lower().strip()]
+    if exact:
+        return exact, offset + max_results, len(exact)
+    # 3. Fuzzy match (optional)
+    import difflib
+    names = [f.file_name for f in results]
+    close = difflib.get_close_matches(query, names, n=3, cutoff=0.7)
+    fuzzy = [f for f in results if f.file_name in close]
+    if fuzzy:
+        return fuzzy, offset + max_results, len(fuzzy)
+    # 4. Fallback: show all text search results
+    return results, offset + max_results, len(results)
 
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
