@@ -1,5 +1,6 @@
 import logging
 from struct import pack
+import difflib
 import re
 import base64
 from pyrogram.file_id import FileId
@@ -67,26 +68,37 @@ async def save_file(media):
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
             return True, 1
 
+def normalize(text):
+    return re.sub(r'[^a-zA-Z0-9 ]', '', text.lower().strip())
 
-
-async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
-    # 1. Phrase search (fast and fairly accurate)
+async def get_search_results(query, file_type=None, max_results=20, offset=0, filter=False):
+    # 1. Phrase search (most accurate)
     filter_query = {'$text': {'$search': f"\"{query}\""}}
     if file_type:
         filter_query['file_type'] = file_type
     results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
-    # 2. Post-filter for exact match
-    exact = [f for f in results if f.file_name.lower().strip() == query.lower().strip()]
+    
+    # 2. Keyword match (if phrase search fails)
+    if not results:
+        filter_query = {'$text': {'$search': query}}
+        if file_type:
+            filter_query['file_type'] = file_type
+        results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
+    
+    # 3. Strong post-filter for normalization and fuzzy matching
+    normalized_query = normalize(query)
+    exact = [f for f in results if normalize(f.file_name) == normalized_query]
     if exact:
         return exact, offset + max_results, len(exact)
-    # 3. Fuzzy match (optional)
-    import difflib
-    names = [f.file_name for f in results]
-    close = difflib.get_close_matches(query, names, n=3, cutoff=0.7)
-    fuzzy = [f for f in results if f.file_name in close]
+    
+    # 4. Fuzzy match (for typos, etc.)
+    fuzzy = fuzzy_filter(normalized_query, results)
     if fuzzy:
         return fuzzy, offset + max_results, len(fuzzy)
-    # 4. Fallback: show all text search results
+    
+    # 5. Rank by keyword score (best matches first)
+    results.sort(key=lambda f: keyword_score(normalized_query, f.file_name), reverse=True)
+    
     return results, offset + max_results, len(results)
 
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
