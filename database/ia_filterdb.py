@@ -69,20 +69,19 @@ async def save_file(media):
 
 
 
-async def get_search_results(query, file_type=None, max_results=(MAX_BTN), offset=0, filter=False):
-    if not query:
-        return []
+async def get_search_results(query, file_type=None, max_results=20, offset=0, filter=False):
+    # First, use text search for speed
     filter_query = {'$text': {'$search': query}}
     if file_type:
         filter_query['file_type'] = file_type
-    total_results = await Media.count_documents(filter_query)
-    next_offset = offset + max_results
-    if next_offset > total_results:
-        next_offset = ''
     cursor = Media.find(filter_query)
     cursor.skip(offset).limit(max_results)
     files = await cursor.to_list(length=max_results)
-    return files, next_offset, total_results
+    
+    # Then, filter for more exact matches
+    exact_files = [f for f in files if query.lower() in f.file_name.lower()]
+    # If not enough exact matches, return all text search results (fallback)
+    return exact_files if exact_files else files, offset + max_results, len(files)
 
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
