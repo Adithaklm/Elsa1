@@ -84,7 +84,7 @@ async def save_file(media):
             return True, 1
 
 
-async def get_search_results(query, file_type=None, max_results=20, offset=0, filter=False):
+async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
     # 1. Phrase search (most accurate)
     filter_query = {'$text': {'$search': f"\"{query}\""}}
     if file_type:
