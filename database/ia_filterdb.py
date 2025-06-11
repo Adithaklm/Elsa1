@@ -28,7 +28,10 @@ class Media(Document):
     caption = fields.StrField(allow_none=True)
 
     class Meta:
-        indexes = ('$file_name', )
+        indexes = (
+            ('$file_name', ),  # Single-field index (existing)
+            (('file_name', 1), ('caption', 1)),  # Compound index (add this)
+        )
         collection_name = COLLECTION_NAME
 
 
