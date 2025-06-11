@@ -102,18 +102,17 @@ async def get_search_results(query, file_type=None, max_results=6, offset=0, fil
     normalized_query = normalize(query)
     exact = [f for f in results if normalize(f.file_name) == normalized_query]
     if exact:
-        return exact, offset + max_results, len(exact)
+        return exact[:max_results], offset + max_results, len(exact)
     
     # 4. Fuzzy match (for typos, etc.)
-    fuzzy = fuzzy_filter(normalized_query, results)
+    fuzzy = fuzzy_filter(normalized_query, results, n=max_results)
     if fuzzy:
-        return fuzzy, offset + max_results, len(fuzzy)
+        return fuzzy[:max_results], offset + max_results, len(fuzzy)
     
     # 5. Rank by keyword score (best matches first)
     results.sort(key=lambda f: keyword_score(normalized_query, f.file_name), reverse=True)
     
-    return results, offset + max_results, len(results)
-
+    return results[:max_results], offset + max_results, len(results)
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
     query = query.strip()
