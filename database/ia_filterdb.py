@@ -9,14 +9,22 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow.exceptions import ValidationError
 from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_BTN
-# ... other imports
+# ... (other imports)
 
 def fuzzy_filter(query, file_list, n=5, cutoff=0.7):
     names = [f.file_name for f in file_list]
     close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
     return [f for f in file_list if f.file_name in close]
 
-# ... rest of your code
+def keyword_score(query, file_name):
+    words = query.lower().split()
+    name = file_name.lower()
+    return sum(1 for w in words if w in name)
+
+def normalize(text):
+    return re.sub(r'[^a-zA-Z0-9 ]', '', text.lower().strip())
+
+# ... rest of your code ...
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -75,8 +83,6 @@ async def save_file(media):
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
             return True, 1
 
-def normalize(text):
-    return re.sub(r'[^a-zA-Z0-9 ]', '', text.lower().strip())
 
 async def get_search_results(query, file_type=None, max_results=20, offset=0, filter=False):
     # 1. Phrase search (most accurate)
