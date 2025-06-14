@@ -104,9 +104,30 @@ async def get_search_results(query, file_type=None, max_results=6, offset=0, fil
         return fuzzy[:max_results], offset + max_results, len(fuzzy)
     # Step 4: Keyword score ranking (with normalization)
     candidates.sort(key=lambda f: keyword_score(query, f.file_name), reverse=True)
-    return candidates[:max_results], offset + max_results, len(candidates)
-    
-    return results[:max_results], offset + max_results, len(results)
+    if candidates:
+        return candidates[:max_results], offset + max_results, len(candidates)
+
+    # --- REGEX FALLBACK: punctuation-insensitive search ---
+    # Build a regex pattern that matches the query with optional punctuation between words
+    words = re.findall(r'\w+', query)
+    if not words:
+        return [], offset, 0
+    regex_pattern = r'.*' + r'[^a-zA-Z0-9]+'.join(map(re.escape, words)) + r'.*'
+    regex_query = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
+    if file_type:
+        regex_query['file_type'] = file_type
+    regex_candidates = await Media.find(regex_query).skip(offset).limit(30).to_list(length=30)
+
+    # Repeat normalization-based ranking on regex results
+    exact = [f for f in regex_candidates if normalize(f.file_name) == normalized_query]
+    if exact:
+        return exact[:max_results], offset + max_results, len(exact)
+    fuzzy = fuzzy_filter(query, regex_candidates, n=max_results)
+    if fuzzy:
+        return fuzzy[:max_results], offset + max_results, len(fuzzy)
+    regex_candidates.sort(key=lambda f: keyword_score(query, f.file_name), reverse=True)
+    return regex_candidates[:max_results], offset + max_results, len(regex_candidates)
+
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
     query = query.strip()
