@@ -21,11 +21,6 @@ def fuzzy_filter(query, file_list, n=5, cutoff=0.7):
     close = difflib.get_close_matches(query_norm, names, n=n, cutoff=cutoff)
     return [f for f in file_list if normalize(f.file_name) in close]
 
-def keyword_score(query, file_name):
-    words = query.lower().split()
-    name = file_name.lower()
-    return sum(1 for w in words if w in name)
-
 # ... rest of your code ...
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
