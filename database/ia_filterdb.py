@@ -83,35 +83,29 @@ async def save_file(media):
             return True, 1
 
 
-async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
-    # 1. Phrase search (most accurate)
-    filter_query = {'$text': {'$search': f"\"{query}\""}}
-    if file_type:
-        filter_query['file_type'] = file_type
-    results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
+async def get_search_results(query, file_type=None, max_results=(MAX_RIST_BTNS), offset=0, filter=False):
+    query = query.strip()
+    if not query: raw_pattern = '.'
+    elif ' ' not in query: raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+    else: raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+    try: regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except: return [], '', 0
+    filter = {'file_name': regex}
+    if file_type: filter['file_type'] = file_type
+
+    total_results = await Media.count_documents(filter)
+    next_offset = offset + max_results
+    if next_offset > total_results: next_offset = ''
+
+    cursor = Media.find(filter)
+    # Sort by recent
+    cursor.sort('$natural', -1)
+    # Slice files according to offset and max results
+    cursor.skip(offset).limit(max_results)
+    # Get list of files
+    files = await cursor.to_list(length=max_results)
+    return files, next_offset, total_results
     
-    # 2. Keyword match (if phrase search fails)
-    if not results:
-        filter_query = {'$text': {'$search': query}}
-        if file_type:
-            filter_query['file_type'] = file_type
-        results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
-    
-    # 3. Strong post-filter for normalization and fuzzy matching
-    normalized_query = normalize(query)
-    exact = [f for f in results if normalize(f.file_name) == normalized_query]
-    if exact:
-        return exact[:max_results], offset + max_results, len(exact)
-    
-    # 4. Fuzzy match (for typos, etc.)
-    fuzzy = fuzzy_filter(normalized_query, results, n=max_results)
-    if fuzzy:
-        return fuzzy[:max_results], offset + max_results, len(fuzzy)
-    
-    # 5. Rank by keyword score (best matches first)
-    results.sort(key=lambda f: keyword_score(normalized_query, f.file_name), reverse=True)
-    
-    return results[:max_results], offset + max_results, len(results)
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
     query = query.strip()
