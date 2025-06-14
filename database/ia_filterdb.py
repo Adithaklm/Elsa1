@@ -11,18 +11,20 @@ from marshmallow.exceptions import ValidationError
 from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_BTN
 # ... (other imports)
 
+def normalize(text):
+    # Remove all non-alphanumerics, collapse spaces, and lowercase
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-zA-Z0-9]', ' ', text)).strip().lower()
+
 def fuzzy_filter(query, file_list, n=5, cutoff=0.7):
-    names = [f.file_name for f in file_list]
-    close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
-    return [f for f in file_list if f.file_name in close]
+    query_norm = normalize(query)
+    names = [normalize(f.file_name) for f in file_list]
+    close = difflib.get_close_matches(query_norm, names, n=n, cutoff=cutoff)
+    return [f for f in file_list if normalize(f.file_name) in close]
 
 def keyword_score(query, file_name):
     words = query.lower().split()
     name = file_name.lower()
     return sum(1 for w in words if w in name)
-
-def normalize(text):
-    return re.sub(r'[^a-zA-Z0-9 ]', '', text.lower().strip())
 
 # ... rest of your code ...
 logger = logging.getLogger(__name__)
