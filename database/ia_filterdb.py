@@ -54,9 +54,9 @@ class Media(Document):
 async def save_file(media):
     """Save file in database"""
 
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    # (_, -, +, ., (, ), |) ഇവയെല്ലാം ഒഴിവാക്കുന്നു
+    file_name = re.sub(r"[_\-\+\.\(\)\|]", " ", str(media.file_name))
     try:
         file = Media(
             file_id=file_id,
@@ -77,7 +77,6 @@ async def save_file(media):
             logger.warning(
                 f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
             )
-
             return False, 0
         else:
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
