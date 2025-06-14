@@ -12,15 +12,20 @@ from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTE
 # ... (other imports)
 
 def normalize(text):
-    # Remove all non-alphanumerics, collapse spaces, and lowercase
+    # Remove all non-alphanumeric, collapse spaces, lowercase
     return re.sub(r'\s+', ' ', re.sub(r'[^a-zA-Z0-9]', ' ', text)).strip().lower()
 
-def fuzzy_filter(query, file_list, n=5, cutoff=0.7):
+def fuzzy_filter(query, file_list, n=6, cutoff=0.7):
     query_norm = normalize(query)
     names = [normalize(f.file_name) for f in file_list]
     close = difflib.get_close_matches(query_norm, names, n=n, cutoff=cutoff)
     return [f for f in file_list if normalize(f.file_name) in close]
 
+def keyword_score(query, file_name):
+    words = normalize(query).split()
+    name = normalize(file_name)
+    return sum(1 for w in words if w in name)
+    
 # ... rest of your code ...
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -80,30 +85,26 @@ async def save_file(media):
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
             return True, 1
 
-
 async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
-    filter_query = {'$text': {'$search': f"\"{query}\""}}
+    # Step 1: Get a broad set of candidates from MongoDB
+    base_query = {'$text': {'$search': query}}
     if file_type:
-        filter_query['file_type'] = file_type
-    results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
-
-    if not results:
-        filter_query = {'$text': {'$search': query}}
-        if file_type:
-            filter_query['file_type'] = file_type
-        results = await Media.find(filter_query).skip(offset).limit(max_results).to_list(length=max_results)
+        base_query['file_type'] = file_type
+    # Fetch more than max_results to ensure we can filter
+    candidates = await Media.find(base_query).skip(offset).limit(30).to_list(length=30)
 
     normalized_query = normalize(query)
-    exact = [f for f in results if normalize(f.file_name) == normalized_query]
+    # Step 2: Exact normalized match
+    exact = [f for f in candidates if normalize(f.file_name) == normalized_query]
     if exact:
         return exact[:max_results], offset + max_results, len(exact)
-    fuzzy = fuzzy_filter(query, results, n=max_results)
+    # Step 3: Fuzzy match (with normalization)
+    fuzzy = fuzzy_filter(query, candidates, n=max_results)
     if fuzzy:
         return fuzzy[:max_results], offset + max_results, len(fuzzy)
-
-    # Optionally, sort results by number of words in common
-    results.sort(key=lambda f: sum(1 for w in normalized_query.split() if w in normalize(f.file_name)), reverse=True)
-    return results[:max_results], offset + max_results, len(results)
+    # Step 4: Keyword score ranking (with normalization)
+    candidates.sort(key=lambda f: keyword_score(query, f.file_name), reverse=True)
+    return candidates[:max_results], offset + max_results, len(candidates)
     
     return results[:max_results], offset + max_results, len(results)
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
