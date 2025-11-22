@@ -1,327 +1,247 @@
+# ia_filterdb.py
 """
-database/ia_filterdb.py — v8
+Optimized DB search layer for Telegram media bot.
 
-Database layer used by the bot. Responsibilities:
-- motor client + umongo Instance
-- Media umongo Document
-- save_file(media)
-- unpack_new_file_id(...)
-- get_file_details(...)
-- get_search_results(...) with $text primary and improved regex fallback (lookahead)
-- get_bad_files(...)
-
-Notes:
-- Requires DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER in info.py
-- Designed to be tolerant across different umongo versions.
+Features:
+- Creates/ensures text & file_name indexes
+- Tiered search: exact phrase -> word-boundary -> partial -> Mongo text -> fuzzy trigram fallback
+- Lightweight in-memory TTL cache
+- Uses motor (async MongoDB driver)
+- Returns minimal projection for speed
 """
-from typing import Tuple, Optional, Dict, Any, List
+
 import re
-import logging
-import difflib
-
+import time
+import asyncio
+from typing import List, Dict, Any, Optional, Tuple
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import TEXT, ASCENDING
 from pymongo.errors import DuplicateKeyError
-from umongo import Instance, Document, fields
-
-from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER
+import difflib
+import math
+import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# ---------------------------------------------------------------------
+# -------------------------
+# Configuration (override as needed)
+# -------------------------
+DATABASE_URI = "mongodb://localhost:27017"
+DATABASE_NAME = "botdb"
+COLLECTION_NAME = "media_files"
+CACHE_TTL_SECONDS = 60 * 2  # cache queries for 2 minutes
+FUZZY_CANDIDATE_LIMIT = 2000  # number of DB rows to consider for fuzzy fallback
+DEFAULT_LIMIT = 15
+
+# -------------------------
 # Utilities
-# ---------------------------------------------------------------------
-def fuzzy_filter(query: str, file_list: List[Any], n: int = 5, cutoff: float = 0.7) -> List[Any]:
-    names = [f.file_name for f in file_list]
-    close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
-    return [f for f in file_list if f.file_name in close]
+# -------------------------
+def normalize_text(s: str) -> str:
+    """Lowercase + strip whitespace and reduce multiple spaces."""
+    return re.sub(r"\s+", " ", s.strip().lower())
 
-def keyword_score(query: str, file_name: str) -> int:
-    words = query.lower().split()
-    name = file_name.lower()
-    return sum(1 for w in words if w in name)
+def split_trigrams(s: str) -> List[str]:
+    """Return list of character trigrams for string s (after padding)."""
+    s = f"  {s}  "
+    return [s[i:i+3] for i in range(len(s)-2)]
 
-def normalize(text: Optional[str]) -> str:
-    return re.sub(r'[^a-zA-Z0-9 ]', '', (text or "").lower().strip())
+def trigram_similarity(a: str, b: str) -> float:
+    """Jaccard-like trigram similarity between two strings."""
+    ta = set(split_trigrams(a))
+    tb = set(split_trigrams(b))
+    if not ta or not tb:
+        return 0.0
+    inter = len(ta & tb)
+    union = len(ta | tb)
+    return inter / union
 
-# ---------------------------------------------------------------------
-# Mongo client + umongo instance
-# ---------------------------------------------------------------------
-if not DATABASE_URI:
-    raise RuntimeError("DATABASE_URI not set in info.py")
+# -------------------------
+# Simple TTL cache
+# -------------------------
+class SimpleTTLCache:
+    def __init__(self, ttl_seconds: int = 120):
+        self.ttl = ttl_seconds
+        self.store: Dict[str, Tuple[float, Any]] = {}
 
-client = AsyncIOMotorClient(DATABASE_URI)
-db = client[DATABASE_NAME]
-instance = Instance.from_db(db)
+    def get(self, key: str):
+        entry = self.store.get(key)
+        if not entry:
+            return None
+        ts, val = entry
+        if time.time() - ts > self.ttl:
+            del self.store[key]
+            return None
+        return val
 
-# ---------------------------------------------------------------------
-# Media Document
-# ---------------------------------------------------------------------
-@instance.register
-class Media(Document):
-    file_id = fields.StrField(attribute='_id')
-    file_ref = fields.StrField(allow_none=True)
-    file_name = fields.StrField(required=True)
-    file_size = fields.IntField(required=True)
-    file_type = fields.StrField(allow_none=True)
-    mime_type = fields.StrField(allow_none=True)
-    caption = fields.StrField(allow_none=True)
+    def set(self, key: str, value: Any):
+        self.store[key] = (time.time(), value)
 
-    class Meta:
-        collection_name = COLLECTION_NAME
+    def clear(self):
+        self.store.clear()
 
-# ---------------------------------------------------------------------
-# Save file
-# ---------------------------------------------------------------------
-async def save_file(media) -> Tuple[bool, int]:
-    """
-    Save a media object into DB.
-    Returns (success_bool, status_code):
-      1 => inserted, 0 => duplicate, 2 => validation/other error
-    """
-    fid, fref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"[_\-\+\.\(\)\|]", " ", str(media.file_name))
-    try:
-        doc = Media(
-            file_id=fid,
-            file_ref=fref,
-            file_name=file_name,
-            file_size=media.file_size,
-            file_type=media.file_type,
-            mime_type=media.mime_type,
-            caption=media.caption.html if getattr(media, "caption", None) else None,
-        )
-    except Exception:
-        logger.exception("Error while constructing Media document")
-        return False, 2
+query_cache = SimpleTTLCache(ttl_seconds=CACHE_TTL_SECONDS)
 
-    try:
-        await doc.commit()
-    except DuplicateKeyError:
-        logger.warning("%s is already saved in database", getattr(media, "file_name", "NO_FILE"))
-        return False, 0
-    except Exception:
-        logger.exception("Error while committing Media to DB")
-        return False, 2
+# -------------------------
+# Database layer
+# -------------------------
+class MediaDB:
+    def __init__(self,
+                 uri: str = DATABASE_URI,
+                 db_name: str = DATABASE_NAME,
+                 collection_name: str = COLLECTION_NAME):
+        self.client = AsyncIOMotorClient(uri)
+        self.db = self.client[db_name]
+        self.collection = self.db[collection_name]
 
-    logger.info("%s saved to database", getattr(media, "file_name", "NO_FILE"))
-    return True, 1
-
-# ---------------------------------------------------------------------
-# Helpers used by other modules
-# ---------------------------------------------------------------------
-# Project may provide its own unpack_new_file_id; if so try to use it.
-try:
-    from utils import unpack_new_file_id as project_unpack_new_file_id
-except Exception:
-    project_unpack_new_file_id = None
-
-def unpack_new_file_id(file_id: Any) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Normalize file_id input into (file_id_str, file_ref_str).
-    Uses project-provided implementation if available, otherwise a permissive fallback.
-    """
-    if project_unpack_new_file_id:
+    async def ensure_indexes(self):
+        """
+        Ensure indexes exist:
+         - text index on file_name and caption for $text search
+         - case-insensitive index on file_name (not strictly possible; but a normal index helps regex)
+        """
+        # Text index (weights can be tuned)
         try:
-            return project_unpack_new_file_id(file_id)
-        except Exception:
-            # fall back to local behavior if project's function fails
-            logger.exception("project unpack_new_file_id raised; falling back to builtin")
-
-    if not file_id:
-        return None, None
-
-    if isinstance(file_id, (list, tuple)) and len(file_id) >= 1:
-        fid = str(file_id[0]) if file_id[0] is not None else None
-        ref = str(file_id[1]) if len(file_id) > 1 and file_id[1] is not None else None
-        return fid, ref
-
-    try:
-        if hasattr(file_id, "get"):
-            fid = file_id.get("file_id") or file_id.get("_id") or file_id.get("id")
-            if fid:
-                return str(fid), None
-    except Exception:
-        pass
-
-    return str(file_id), None
-
-async def get_file_details(file_identifier: Any) -> Optional[Dict[str, Any]]:
-    """
-    Return plain dict with stored file details for given identifier.
-    Plugins may expect a dict with keys: file_id, file_ref, file_name, file_size, file_type, mime_type, caption
-    """
-    fid, _ = unpack_new_file_id(file_identifier)
-    if not fid:
-        return None
-
-    # prefer lookup by _id (stored as _id)
-    doc = await db[COLLECTION_NAME].find_one({"_id": fid})
-    if not doc:
-        doc = await db[COLLECTION_NAME].find_one({"file_id": fid})
-    if not doc:
-        return None
-
-    return {
-        "file_id": doc.get("_id") or doc.get("file_id"),
-        "file_ref": doc.get("file_ref"),
-        "file_name": doc.get("file_name"),
-        "file_size": doc.get("file_size"),
-        "file_type": doc.get("file_type"),
-        "mime_type": doc.get("mime_type"),
-        "caption": doc.get("caption"),
-    }
-
-# ---------------------------------------------------------------------
-# Search functions (improved fallback)
-# ---------------------------------------------------------------------
-async def get_search_results(query: str, file_type: Optional[str] = None,
-                             max_results: int = 6, offset: int = 0, filter: bool = False):
-    """
-    Hybrid search:
-    - Use $text (text index) for multi-word or longer queries (fast)
-    - If $text yields no hits, fallback to a regex built with positive lookaheads
-      so all tokens must be present anywhere (handles numbers, adjacency, orderless)
-    - For short single-token queries use a word-boundary regex on file_name
-    Returns: (files, next_offset, total_results)
-    """
-    query = (query or "").strip()
-    projection = {"file_name": 1, "file_id": 1, "file_size": 1, "file_type": 1, "caption": 1}
-
-    tokens = [t for t in re.split(r'\s+', query) if t]
-    mongo_filter = {}
-
-    # decide primary strategy
-    use_text_search = False
-    if not query:
-        mongo_filter = {}
-    elif " " in query or len(query) > 2:
-        use_text_search = True
-        mongo_filter = {"$text": {"$search": query}}
-    else:
-        # single short token -> word-boundary regex
-        raw_pattern = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
-        try:
-            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-        except Exception:
-            logger.exception("Invalid regex for single-token search")
-            return [], '', 0
-        mongo_filter = {"file_name": regex}
-
-    if file_type:
-        if mongo_filter:
-            mongo_filter = {"$and": [mongo_filter, {"file_type": file_type}]}
-        else:
-            mongo_filter = {"file_type": file_type}
-
-    async def run_and_paginate(filter_q):
-        total = None
-        try:
-            total = await db[COLLECTION_NAME].count_documents(filter_q)
-        except Exception:
-            logger.exception("count_documents failed for filter: %s", filter_q)
-            total = None
-
-        cursor = Media.find(filter_q, projection)
-        cursor.sort("_id", -1)
-        docs = await cursor.skip(offset).limit(max_results + 1).to_list(length=max_results + 1)
-
-        if len(docs) <= max_results:
-            return docs, '', total
-        return docs[:max_results], offset + max_results, total
-
-    # Try text search first when applicable
-    if use_text_search:
-        try:
-            files, next_offset, total = await run_and_paginate(mongo_filter)
+            await self.collection.create_index(
+                [("file_name", TEXT), ("caption", TEXT)],
+                name="text_idx",
+                default_language="english",
+                background=True
+            )
+            # Helpful index for prefix/regex searches
+            await self.collection.create_index([("file_name", ASCENDING)], name="file_name_idx", background=True)
+            logger.info("Indexes ensured")
         except Exception as e:
-            logger.exception("Text search error: %s", e)
-            files, next_offset, total = [], '', None
+            logger.exception("Index creation failed: %s", e)
 
-        if files:
-            return files, next_offset, total
+    async def save_file(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Insert or update minimal media metadata.
+        Required fields: file_id (unique), file_name
+        """
+        assert "file_id" in data and "file_name" in data
+        data.setdefault("created_at", time.time())
+        data["file_name_norm"] = normalize_text(data["file_name"])
+        try:
+            res = await self.collection.insert_one(data)
+            return {"ok": True, "id": str(res.inserted_id)}
+        except DuplicateKeyError:
+            # fallback: update existing
+            await self.collection.update_one({"file_id": data["file_id"]}, {"$set": data})
+            return {"ok": True, "updated": True}
+        except Exception as e:
+            logger.exception("save_file error")
+            return {"ok": False, "error": str(e)}
 
-        # Fallback: build a single regex using positive lookahead for every token.
-        # This matches documents that contain all tokens anywhere, in any order,
-        # and handles adjacent tokens (e.g., "Dude2025") as well.
-        if tokens:
-            lookahead_parts = []
-            for tok in tokens:
-                # For numeric-only tokens, don't wrap with \b because numbers can be adjacent to letters.
-                if re.fullmatch(r'\d+', tok):
-                    part = '(?=.*' + re.escape(tok) + ')'
-                else:
-                    # allow token to appear as substring or word; use \b for word-like tokens,
-                    # but also allow adjacency by including both forms to be robust.
-                    part = '(?=.*' + re.escape(tok) + ')'
-                lookahead_parts.append(part)
-            pattern = ''.join(lookahead_parts) + '.*'
+    # -------------------------
+    # Search API
+    # -------------------------
+    async def get_search_results(self, query: str, limit: int = DEFAULT_LIMIT) -> List[Dict[str, Any]]:
+        """
+        Tiered search:
+         1) exact phrase (whole string)
+         2) word-boundary match
+         3) partial contains
+         4) MongoDB $text (if available) with sort by score
+         5) fuzzy trigram fallback (cheap approximate)
+        """
+        if not query or not query.strip():
+            return []
+
+        query_norm = normalize_text(query)
+        cache_key = f"search::{query_norm}::{limit}"
+        cached = query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        projection = {"file_id": 1, "file_name": 1, "caption": 1, "mime_type": 1, "_id": 0}
+        results = []
+
+        # 1) exact phrase (strict)
+        regex_exact = re.compile(rf"^{re.escape(query_norm)}$", re.IGNORECASE | re.UNICODE)
+        r = await self.collection.find({"file_name_norm": {"$regex": regex_exact}}, projection).to_list(length=limit)
+        if r:
+            query_cache.set(cache_key, r[:limit])
+            return r[:limit]
+
+        # 2) word-boundary match
+        # protect special regex characters in query
+        regex_word = re.compile(rf"\b{re.escape(query_norm)}\b", re.IGNORECASE | re.UNICODE)
+        r = await self.collection.find({"file_name_norm": {"$regex": regex_word}}, projection).to_list(length=limit)
+        if r:
+            query_cache.set(cache_key, r[:limit])
+            return r[:limit]
+
+        # 3) partial contains (substring)
+        regex_partial = re.compile(re.escape(query_norm), re.IGNORECASE | re.UNICODE)
+        r = await self.collection.find({"file_name_norm": {"$regex": regex_partial}}, projection).to_list(length=limit)
+        if r:
+            query_cache.set(cache_key, r[:limit])
+            return r[:limit]
+
+        # 4) $text search (if text index exists); give it a shot
+        try:
+            # Use $text with score if possible
+            cursor = self.collection.find(
+                {"$text": {"$search": query}},
+                {"score": {"$meta": "textScore"}, **projection}
+            ).sort([("score", {"$meta": "textScore"})]).limit(limit)
+            r = await cursor.to_list(length=limit)
+            if r:
+                query_cache.set(cache_key, r[:limit])
+                return r[:limit]
+        except Exception:
+            # either no text index or other issue — ignore and move to fuzzy fallback
+            logger.debug("Text search failed or not available for query=%s", query)
+
+        # 5) Fuzzy fallback (trigram similarity)
+        # Pull a bounded candidate set from DB to avoid scanning whole collection.
+        # Here we fetch filenames that contain at least one word from query (cheap prune).
+        words = [w for w in re.split(r"\s+", query_norm) if w]
+        if words:
+            # Build regex OR of words (escaped)
+            or_pattern = "|".join(re.escape(w) for w in words[:5])  # limit to first 5 words to avoid huge regex
+            prune_regex = re.compile(or_pattern, re.IGNORECASE | re.UNICODE)
             try:
-                lookahead_regex = re.compile(pattern, flags=re.IGNORECASE)
-            except Exception as e:
-                logger.exception("Failed to compile lookahead regex (%s): %s", pattern, e)
-                # fallback to earlier per-token AND regex approach
-                and_conditions = []
-                for tok in tokens:
-                    tok_regex = re.compile(r'\b' + re.escape(tok) + r'\b', flags=re.IGNORECASE)
-                    if USE_CAPTION_FILTER:
-                        and_conditions.append({"$or": [{"file_name": tok_regex}, {"caption": tok_regex}]})
-                    else:
-                        and_conditions.append({"file_name": tok_regex})
-                if file_type:
-                    and_conditions.append({"file_type": file_type})
-                fallback_filter = {"$and": and_conditions} if and_conditions else {}
-                return await run_and_paginate(fallback_filter)
+                candidates = await self.collection.find(
+                    {"file_name_norm": {"$regex": prune_regex}},
+                    projection
+                ).to_list(length=FUZZY_CANDIDATE_LIMIT)
+            except Exception:
+                candidates = await self.collection.find({}, projection).to_list(length=FUZZY_CANDIDATE_LIMIT)
+        else:
+            candidates = await self.collection.find({}, projection).to_list(length=FUZZY_CANDIDATE_LIMIT)
 
-            # build final fallback filter checking file_name and optionally caption
-            if USE_CAPTION_FILTER:
-                fallback_filter = {"$or": [{"file_name": lookahead_regex}, {"caption": lookahead_regex}]}
-            else:
-                fallback_filter = {"file_name": lookahead_regex}
+        # compute trigram similarity and also use difflib ratio as tie-breaker
+        scored: List[Tuple[float, Dict[str, Any]]] = []
+        for doc in candidates:
+            name = normalize_text(doc.get("file_name", ""))
+            score_tri = trigram_similarity(query_norm, name)
+            # difflib's ratio can help when trigrams are sparse (short strings)
+            d_ratio = difflib.SequenceMatcher(None, query_norm, name).ratio()
+            # combine: give trigram more weight but include difflib
+            combined = 0.8 * score_tri + 0.2 * d_ratio
+            if combined > 0.12:  # threshold to drop hopeless matches
+                scored.append((combined, doc))
 
-            if file_type:
-                # combine file_type requirement
-                fallback_filter = {"$and": [fallback_filter, {"file_type": file_type}]}
+        scored.sort(key=lambda x: x[0], reverse=True)
+        final = [doc for score, doc in scored[:limit]]
+        query_cache.set(cache_key, final)
+        return final
 
-            logger.info("Text search returned no results, using lookahead regex fallback: %s", pattern)
-            return await run_and_paginate(fallback_filter)
+    # Optional helper: force-clear cache (useful during updates)
+    def clear_cache(self):
+        query_cache.clear()
 
-        # tokens empty -> nothing to fallback to
-        return [], '', total
+# -------------------------
+# Example usage (for dev)
+# -------------------------
+if __name__ == "__main__":
+    async def _demo():
+        m = MediaDB()
+        await m.ensure_indexes()
+        print("Indexes ensured. Try searching...")
+        res = await m.get_search_results("thor", limit=10)
+        print("Results:", res)
 
-    # Not using text search (single-token case)
-    return await run_and_paginate(mongo_filter)
-
-# ---------------------------------------------------------------------
-# get_bad_files
-# ---------------------------------------------------------------------
-async def get_bad_files(query: str, file_type: Optional[str] = None,
-                        max_results: int = 100, offset: int = 0, filter: bool = False):
-    """
-    Used by admin tools: broader search.
-    """
-    query = (query or "").strip()
-    if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
-    else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
-
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except Exception:
-        return []
-
-    if USE_CAPTION_FILTER:
-        mongo_filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
-    else:
-        mongo_filter = {'file_name': regex}
-
-    if file_type:
-        mongo_filter['file_type'] = file_type
-
-    cursor = Media.find(mongo_filter, {"file_name": 1, "file_id": 1, "file_size": 1, "file_type": 1, "caption": 1})
-    cursor.sort("_id", -1)
-    files = await cursor.skip(offset).limit(max_results).to_list(length=max_results)
-    return files
+    asyncio.run(_demo())
