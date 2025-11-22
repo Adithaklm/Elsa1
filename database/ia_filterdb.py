@@ -1,4 +1,3 @@
-ഗഥം നന്നായി — ഞാൻ ഫയൽ തന്നെ ശരിയാക്കി. അതില്‍ ഉണ്ടായിരുന്ന indentation പിശകുകളും Media = MediaDB ആന്‍റു തെറ്റായ സ്ഥാനത്തുള്ളത് ഞാൻ ശരിയാക്കി. താഴെ നീ ഒറ്റത്തവണ കോപ്പി-പേസ്റ്റ് ചെയ്ത് database/ia_filterdb.py മാറ്റിവെക്കൂ, പിന്നെ python -m py_compile database/ia_filterdb.py റൺ ചെയ്ത് syntax ശരിയാണെന്ന് ഉറപ്പാക്കുക. പിന്നീട് redeploy ചെയ്യൂ — ഇത് IndentationError തിരക്കും.
 
 # ia_filterdb.py
 """
