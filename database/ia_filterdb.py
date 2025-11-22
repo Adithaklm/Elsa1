@@ -1,3 +1,5 @@
+ഗഥം നന്നായി — ഞാൻ ഫയൽ തന്നെ ശരിയാക്കി. അതില്‍ ഉണ്ടായിരുന്ന indentation പിശകുകളും Media = MediaDB ആന്‍റു തെറ്റായ സ്ഥാനത്തുള്ളത് ഞാൻ ശരിയാക്കി. താഴെ നീ ഒറ്റത്തവണ കോപ്പി-പേസ്റ്റ് ചെയ്ത് database/ia_filterdb.py മാറ്റിവെക്കൂ, പിന്നെ python -m py_compile database/ia_filterdb.py റൺ ചെയ്ത് syntax ശരിയാണെന്ന് ഉറപ്പാക്കുക. പിന്നീട് redeploy ചെയ്യൂ — ഇത് IndentationError തിരക്കും.
+
 # ia_filterdb.py
 """
 Optimized DB search layer for Telegram media bot.
@@ -93,7 +95,7 @@ class MediaDB:
         self.client = AsyncIOMotorClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
-  
+
     async def ensure_indexes(self):
         """
         Ensure indexes exist:
@@ -113,8 +115,6 @@ class MediaDB:
             logger.info("Indexes ensured")
         except Exception as e:
             logger.exception("Index creation failed: %s", e)
-            # place AFTER the MediaDB class definition
-Media = MediaDB
 
     async def save_file(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -248,4 +248,7 @@ if __name__ == "__main__":
 
     asyncio.run(_demo())
 
+# Backwards compatibility alias (place after MediaDB class)
+Media = MediaDB
 
+ഓരോ മാറ്റത്തിന്റെയും കാര്യക്ഷമത പരിശോധിക്കാൻ python -m py_compile database/ia_filterdb.py റൺ ചെയ്യുക. compile success ആണെങ്കിൽ push & redeploy ചെയ്യൂ — എന്നിട്ട് logs share ചെയ്താൽ ഞാൻ തിരിച്ചറിയുകയും അടുത്ത് search integration help ചെയ്യുകയും ചെയ്യും.
