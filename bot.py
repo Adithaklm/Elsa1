@@ -1,28 +1,19 @@
-import logging
-import logging.config
-
-# Get logging configurations
-logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger("pyrogram").setLevel(logging.ERROR)
-logging.getLogger("imdbpy").setLevel(logging.ERROR)
-
-
-from pyrogram import Client, __version__, filters
-from pyrogram.raw.all import layer
-from database.ia_filterdb import Media
-from database.users_chats_db import db
 from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL, PORT
-from utils import temp
-from motor.motor_asyncio import AsyncIOMotorClient
 from info import MONGO_URL, DATABASE_URI, DATABASE_NAME, COLLECTION_NAME
+from utils import temp
 from typing import Union, Optional, AsyncGenerator
-from pyrogram import types
+from pyrogram import types, __version__
+from pyrogram import Client
 from Script import script 
 from datetime import date, datetime 
 import pytz
 from aiohttp import web
 from plugins import web_server
+import logging
+import os
+
+# Use motor to create/ensure index at startup
+from motor.motor_asyncio import AsyncIOMotorClient
 
 class Bot(Client):
 
@@ -38,11 +29,39 @@ class Bot(Client):
         )
 
     async def start(self):
+        # existing startup tasks
         b_users, b_chats = await db.get_banned()
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
         await super().start()
         await Media.ensure_indexes()
+
+        # Ensure text index on the collection (run once; safe to call every start)
+        try:
+            mongo_url = MONGO_URL or DATABASE_URI or os.environ.get("MONGO_URL") or os.environ.get("DATABASE_URI")
+            if not mongo_url:
+                logging.warning("No MONGO_URL/DATABASE_URI provided — skipping index creation.")
+            else:
+                # Create a short-lived motor client for index creation (re-using existing client is fine if available)
+                client = AsyncIOMotorClient(mongo_url, maxPoolSize=100)
+                db_col = client[DATABASE_NAME][COLLECTION_NAME]
+                # Text index on file_name and caption. Weights give higher importance to file_name.
+                await db_col.create_index(
+                    [("file_name", "text"), ("caption", "text")],
+                    default_language="english",
+                    weights={"file_name": 5, "caption": 1},
+                    background=True,
+                    name="file_name_caption_text_idx"
+                )
+                logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
+                # close client to avoid unused connections (motor doesn't have close() but you can call client.close())
+                try:
+                    client.close()
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.exception("Failed to create/ensure text index: %s", e)
+
         me = await self.get_me()
         temp.ME = me.id
         temp.U_NAME = me.username
@@ -60,36 +79,6 @@ class Bot(Client):
         bind_address = "0.0.0.0"
         await web.TCPSite(app, bind_address, PORT).start()
 
-    # Add this small index-creation snippet inside Bot.start() near startup.
-# Place it after you have DB connection info available and before heavy traffic.
-# This uses motor (AsyncIOMotorClient) to ensure a text index exists on file_name & caption.
-
-
-# inside Bot.start(), after you set up db connection / before sering requests:
-    # --- ensure text index (paste into start after existing startup lines) ---
-    try:
-        mongo_url = MONGO_URL or DATABASE_URI
-        if not mongo_url:
-            logging.warning("No MONGO_URL/DATABASE_URI provided — skipping index creation.")
-        else:
-            client = AsyncIOMotorClient(mongo_url, maxPoolSize=100)
-            db_col = client[DATABASE_NAME][COLLECTION_NAME]
-            # Create a text index on file_name and caption. Weights give higher importance to file_name.
-            await db_col.create_index(
-                [("file_name", "text"), ("caption", "text")],
-                default_language="english",
-                weights={"file_name": 5, "caption": 1},
-                background=True,
-                name="file_name_caption_text_idx"
-            )
-            logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
-    except Exception as e:
-        logging.exception("Failed to create/ensure text index: %s", e)
-    # --- end index creation ---
-
-# Note: If your project already uses a motor client / db object in another module,
-# prefer reusing that client instead of creating a new AsyncIOMotorClient here.
-# The snippet above is the minimal change you can copy/paste.
     async def stop(self, *args):
         await super().stop()
         logging.info("Bot stopped. Bye.")
