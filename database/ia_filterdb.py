@@ -83,28 +83,79 @@ async def save_file(media):
             return True, 1
 
 
+# Replace the existing get_search_results implementation with the code below.
+# This version uses MongoDB $text search when appropriate, avoids count_documents
+# by fetching max_results+1, adds a projection, and sorts by textScore or _id.
+# It keeps the regex fallback for short/single-token queries.
+
+logger = logging.getLogger(__name__)
+
 async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
-    query = query.strip()
-    if not query: raw_pattern = '.'
-    elif ' ' not in query: raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
-    else: raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
-    try: regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except: return [], '', 0
-    filter = {'file_name': regex}
-    if file_type: filter['file_type'] = file_type
+    """
+    Faster search:
+    - Use $text (text index required) for multi-word or longer queries
+    - Fallback to a tighter regex for very short/single-token queries
+    - Use projection to only fetch needed fields
+    - Sort by textScore when using text search, otherwise by _id descending
+    - Use limit(max_results + 1) to determine if there is a next page (avoid count_documents)
+    Returns: (files, next_offset, total_results_or_None)
+    """
+    query = (query or "").strip()
 
-    total_results = await Media.count_documents(filter)
-    next_offset = offset + max_results
-    if next_offset > total_results: next_offset = ''
+    # projection: only the fields we need (reduces payload)
+    projection = {
+        "file_name": 1,
+        "file_id": 1,
+        "file_size": 1,
+        "file_type": 1,
+        "caption": 1,
+    }
 
-    cursor = Media.find(filter)
-    # Sort by recent
-    cursor.sort('$natural', -1)
-    # Slice files according to offset and max results
-    cursor.skip(offset).limit(max_results)
-    # Get list of files
-    files = await cursor.to_list(length=max_results)
-    return files, next_offset, total_results
+    use_text_search = False
+
+    # Decide filter
+    if not query:
+        mongo_filter = {}
+    elif " " in query or len(query) > 2:
+        # Use text search for multi-word or longer queries (requires a text index)
+        use_text_search = True
+        mongo_filter = {"$text": {"$search": query}}
+    else:
+        # Short single token: fallback to a narrower regex to mimic word-boundary matching
+        raw_pattern = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
+        try:
+            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        except Exception as e:
+            logger.exception("Invalid regex for search query: %s", e)
+            return [], '', 0
+        mongo_filter = {"file_name": regex}
+
+    if file_type:
+        mongo_filter["file_type"] = file_type
+
+    # Build cursor with appropriate sort & projection
+    if use_text_search:
+        # include text score and sort by it, then by recency (_id desc)
+        projection["score"] = {"$meta": "textScore"}
+        cursor = Media.find(mongo_filter, projection)
+        # Note: some drivers require sort argument as list of tuples for $meta
+        cursor.sort([("score", {"$meta": "textScore"}), ("_id", -1)])
+    else:
+        cursor = Media.find(mongo_filter, projection)
+        cursor.sort("_id", -1)
+
+    # Pagination: fetch one extra doc to detect next page (avoid count_documents)
+    docs = await cursor.skip(offset).limit(max_results + 1).to_list(length=max_results + 1)
+
+    if len(docs) <= max_results:
+        next_offset = ''
+        files = docs
+    else:
+        files = docs[:max_results]
+        next_offset = offset + max_results
+
+    # We avoid returning/using total_results (expensive). Return None for that slot.
+    return files, next_offset, None
     
 async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
     """For given query return (results, next_offset)"""
