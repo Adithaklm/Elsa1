@@ -1,5 +1,5 @@
 """
-database/ia_filterdb.py — v7
+database/ia_filterdb.py — v8
 
 Database layer used by the bot. Responsibilities:
 - motor client + umongo Instance
@@ -7,7 +7,7 @@ Database layer used by the bot. Responsibilities:
 - save_file(media)
 - unpack_new_file_id(...)
 - get_file_details(...)
-- get_search_results(...) with $text primary and per-token regex fallback
+- get_search_results(...) with $text primary and improved regex fallback (lookahead)
 - get_bad_files(...)
 
 Notes:
@@ -173,19 +173,17 @@ async def get_file_details(file_identifier: Any) -> Optional[Dict[str, Any]]:
     }
 
 # ---------------------------------------------------------------------
-# Search functions
+# Search functions (improved fallback)
 # ---------------------------------------------------------------------
 async def get_search_results(query: str, file_type: Optional[str] = None,
                              max_results: int = 6, offset: int = 0, filter: bool = False):
     """
     Hybrid search:
     - Use $text (text index) for multi-word or longer queries (fast)
-    - If $text yields no hits, fallback to per-token regex ($and) to improve accuracy
+    - If $text yields no hits, fallback to a regex built with positive lookaheads
+      so all tokens must be present anywhere (handles numbers, adjacency, orderless)
     - For short single-token queries use a word-boundary regex on file_name
     Returns: (files, next_offset, total_results)
-      files: list of umongo Media documents
-      next_offset: '' or int
-      total_results: int or None (if counting failed)
     """
     query = (query or "").strip()
     projection = {"file_name": 1, "file_id": 1, "file_size": 1, "file_type": 1, "caption": 1}
@@ -243,24 +241,60 @@ async def get_search_results(query: str, file_type: Optional[str] = None,
         if files:
             return files, next_offset, total
 
-        # Fallback: build per-token AND of regex conditions (match all tokens anywhere)
-        and_conditions = []
-        for tok in tokens:
-            tok_regex = re.compile(r'\b' + re.escape(tok) + r'\b', flags=re.IGNORECASE)
+        # Fallback: build a single regex using positive lookahead for every token.
+        # This matches documents that contain all tokens anywhere, in any order,
+        # and handles adjacent tokens (e.g., "Dude2025") as well.
+        if tokens:
+            lookahead_parts = []
+            for tok in tokens:
+                # For numeric-only tokens, don't wrap with \b because numbers can be adjacent to letters.
+                if re.fullmatch(r'\d+', tok):
+                    part = '(?=.*' + re.escape(tok) + ')'
+                else:
+                    # allow token to appear as substring or word; use \b for word-like tokens,
+                    # but also allow adjacency by including both forms to be robust.
+                    part = '(?=.*' + re.escape(tok) + ')'
+                lookahead_parts.append(part)
+            pattern = ''.join(lookahead_parts) + '.*'
+            try:
+                lookahead_regex = re.compile(pattern, flags=re.IGNORECASE)
+            except Exception as e:
+                logger.exception("Failed to compile lookahead regex (%s): %s", pattern, e)
+                # fallback to earlier per-token AND regex approach
+                and_conditions = []
+                for tok in tokens:
+                    tok_regex = re.compile(r'\b' + re.escape(tok) + r'\b', flags=re.IGNORECASE)
+                    if USE_CAPTION_FILTER:
+                        and_conditions.append({"$or": [{"file_name": tok_regex}, {"caption": tok_regex}]})
+                    else:
+                        and_conditions.append({"file_name": tok_regex})
+                if file_type:
+                    and_conditions.append({"file_type": file_type})
+                fallback_filter = {"$and": and_conditions} if and_conditions else {}
+                return await run_and_paginate(fallback_filter)
+
+            # build final fallback filter checking file_name and optionally caption
             if USE_CAPTION_FILTER:
-                and_conditions.append({"$or": [{"file_name": tok_regex}, {"caption": tok_regex}]})
+                fallback_filter = {"$or": [{"file_name": lookahead_regex}, {"caption": lookahead_regex}]}
             else:
-                and_conditions.append({"file_name": tok_regex})
+                fallback_filter = {"file_name": lookahead_regex}
 
-        if file_type:
-            and_conditions.append({"file_type": file_type})
+            if file_type:
+                # combine file_type requirement
+                fallback_filter = {"$and": [fallback_filter, {"file_type": file_type}]}
 
-        fallback_filter = {"$and": and_conditions} if and_conditions else {}
-        return await run_and_paginate(fallback_filter)
+            logger.info("Text search returned no results, using lookahead regex fallback: %s", pattern)
+            return await run_and_paginate(fallback_filter)
 
-    # Not using text search (single token case)
+        # tokens empty -> nothing to fallback to
+        return [], '', total
+
+    # Not using text search (single-token case)
     return await run_and_paginate(mongo_filter)
 
+# ---------------------------------------------------------------------
+# get_bad_files
+# ---------------------------------------------------------------------
 async def get_bad_files(query: str, file_type: Optional[str] = None,
                         max_results: int = 100, offset: int = 0, filter: bool = False):
     """
