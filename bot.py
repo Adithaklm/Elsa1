@@ -1,3 +1,10 @@
+# പൂർവം:
+# from database.ia_filterdb import Media
+
+# പുതിയത്:
+from database.ia_filterdb import MediaDB
+# usage ല്‍ Media എന്നതു വേണമെങ്കില്‍
+Media = MediaDB
 from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL, PORT
 from info import MONGO_URL, DATABASE_URI, DATABASE_NAME, COLLECTION_NAME
 from utils import temp
