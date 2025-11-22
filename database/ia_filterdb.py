@@ -23,7 +23,9 @@ import difflib
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
-from umongo.exceptions import ValidationError
+# Do NOT import ValidationError from umongo.exceptions (not present in some umongo versions)
+# from umongo.exceptions import ValidationError
+
 from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER
 
 # If your project provides unpack_new_file_id elsewhere, import it.
@@ -93,8 +95,9 @@ async def save_file(media):
             mime_type=media.mime_type,
             caption=media.caption.html if media.caption else None,
         )
-    except ValidationError:
-        logger.exception('Error occurred while saving file in database (validation error)')
+    except Exception:
+        # Catch general exceptions here to be compatible with different umongo versions
+        logger.exception('Error occurred while creating Media object (validation?), check fields')
         return False, 2
     else:
         try:
@@ -155,20 +158,20 @@ async def get_search_results(query, file_type=None, max_results=6, offset=0, fil
     if file_type:
         mongo_filter["file_type"] = file_type
 
-    # Count total results (some parts of the bot expect a numeric count).
-    # Counting can be slow for regex queries on large collections.
+    # Count total results (some parts of the bot expect it). This may be slow for regex on big collections.
     total_results = None
     try:
-        total_results = await Media.count_documents(mongo_filter)
+        total_results = await db[COLLECTION_NAME].count_documents(mongo_filter)
     except Exception as e:
         logger.exception("Failed to count documents for search: %s", e)
         total_results = None
 
     # Build cursor and sort by recency (use _id index)
+    # Use umongo's find to get umongo Document objects
     cursor = Media.find(mongo_filter, projection)
     cursor.sort("_id", -1)
 
-    # Pagination: fetch one extra to detect more pages (avoid depending on count for pagination)
+    # Pagination: fetch one extra to detect next page
     docs = await cursor.skip(offset).limit(max_results + 1).to_list(length=max_results + 1)
 
     if len(docs) <= max_results:
