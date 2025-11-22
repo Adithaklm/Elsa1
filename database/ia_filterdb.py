@@ -250,4 +250,3 @@ if __name__ == "__main__":
 # Backwards compatibility alias (place after MediaDB class)
 Media = MediaDB
 
-ഓരോ മാറ്റത്തിന്റെയും കാര്യക്ഷമത പരിശോധിക്കാൻ python -m py_compile database/ia_filterdb.py റൺ ചെയ്യുക. compile success ആണെങ്കിൽ push & redeploy ചെയ്യൂ — എന്നിട്ട് logs share ചെയ്താൽ ഞാൻ തിരിച്ചറിയുകയും അടുത്ത് search integration help ചെയ്യുകയും ചെയ്യും.
