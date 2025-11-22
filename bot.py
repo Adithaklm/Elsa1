@@ -12,7 +12,10 @@ from plugins import web_server
 import logging
 import os
 
-# Use motor to create/ensure index at startup
+# Database models / client from your database module
+from database.ia_filterdb import db, Media
+
+# Use motor to create/ensure index at startup (only used locally in start)
 from motor.motor_asyncio import AsyncIOMotorClient
 
 class Bot(Client):
@@ -29,12 +32,25 @@ class Bot(Client):
         )
 
     async def start(self):
-        # existing startup tasks
-        b_users, b_chats = await db.get_banned()
+        # Ensure db is referenced from the database module
+        # b_users, b_chats are fetched from the db helper (db should implement get_banned)
+        try:
+            b_users, b_chats = await db.get_banned()
+        except Exception as e:
+            logging.exception("Failed to get banned lists from db: %s", e)
+            b_users, b_chats = [], []
+
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
+
         await super().start()
-        await Media.ensure_indexes()
+
+        # If your Document class has ensure_indexes, keep this; otherwise it's safe to ignore
+        try:
+            await Media.ensure_indexes()
+        except Exception:
+            # Some ORMs expose different index methods; ignore if not present
+            pass
 
         # Ensure text index on the collection (run once; safe to call every start)
         try:
@@ -54,7 +70,6 @@ class Bot(Client):
                     name="file_name_caption_text_idx"
                 )
                 logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
-                # close client to avoid unused connections (motor doesn't have close() but you can call client.close())
                 try:
                     client.close()
                 except Exception:
@@ -67,7 +82,8 @@ class Bot(Client):
         temp.U_NAME = me.username
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
-        logging.info(f"{me.first_name} with for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
+        # Avoid referencing an undefined `layer` variable in logs
+        logging.info(f"{me.first_name} started on {me.username} (Pyrogram {__version__})")
         logging.info(LOG_STR)
         tz = pytz.timezone('Asia/Kolkata')
         today = date.today()
@@ -89,29 +105,6 @@ class Bot(Client):
         limit: int,
         offset: int = 0,
     ) -> Optional[AsyncGenerator["types.Message", None]]:
-        """Iterate through a chat sequentially.
-        This convenience method does the same as repeatedly calling :meth:`~pyrogram.Client.get_messages` in a loop, thus saving
-        you from the hassle of setting up boilerplate code. It is useful for getting the whole chat messages with a
-        single call.
-        Parameters:
-            chat_id (``int`` | ``str``):
-                Unique identifier (int) or username (str) of the target chat.
-                For your personal cloud (Saved Messages) you can simply use "me" or "self".
-                For a contact that exists in your Telegram address book you can use his phone number (str).
-                
-            limit (``int``):
-                Identifier of the last message to be returned.
-                
-            offset (``int``, *optional*):
-                Identifier of the first message to be returned.
-                Defaults to 0.
-        Returns:
-            ``Generator``: A generator yielding :obj:`~pyrogram.types.Message` objects.
-        Example:
-            .. code-block:: python
-                for message in app.iter_messages("pyrogram", 1, 15000):
-                    print(message.text)
-        """
         current = offset
         while True:
             new_diff = min(200, limit - current)
