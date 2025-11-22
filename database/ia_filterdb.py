@@ -93,7 +93,10 @@ class MediaDB:
         self.client = AsyncIOMotorClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
-
+# --- Backwards compatibility alias (place this AFTER MediaDB class definition) ---
+# Old code expected `from database.ia_filterdb import Media`
+# Map it to the new MediaDB class so old imports continue to work
+Media = MediaDB
     async def ensure_indexes(self):
         """
         Ensure indexes exist:
@@ -246,7 +249,4 @@ if __name__ == "__main__":
 
     asyncio.run(_demo())
 
-# --- Backwards compatibility alias (place this AFTER MediaDB class definition) ---
-# Old code expected `from database.ia_filterdb import Media`
-# Map it to the new MediaDB class so old imports continue to work.
-Media = MediaDB
+
