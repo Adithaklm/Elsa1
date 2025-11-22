@@ -13,10 +13,14 @@ import logging
 import os
 
 # Database models / client from your database module
-from database.ia_filterdb import db, Media
+# Use users_chats_db.Database (wrapper with get_banned, get_settings, etc.)
+from database.users_chats_db import Database as UsersDatabase
+# Media Document & underlying DB are still from ia_filterdb where appropriate
+from database.ia_filterdb import Media
 
 # Use motor to create/ensure index at startup (only used locally in start)
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import OperationFailure
 
 class Bot(Client):
 
@@ -30,12 +34,27 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
+        # instantiate the users/groups DB wrapper here so other code can use it
+        mongo_url = MONGO_URL or DATABASE_URI or os.environ.get("MONGO_URL") or os.environ.get("DATABASE_URI")
+        if mongo_url:
+            # UsersDatabase expects (uri, database_name)
+            try:
+                self.userdb = UsersDatabase(mongo_url, DATABASE_NAME)
+            except Exception:
+                # fallback: keep attribute but it may raise later if used
+                logging.exception("Failed to instantiate UsersDatabase wrapper.")
+                self.userdb = None
+        else:
+            logging.warning("No MONGO_URL/DATABASE_URI provided; userdb not instantiated.")
+            self.userdb = None
 
     async def start(self):
-        # Ensure db is referenced from the database module
-        # b_users, b_chats are fetched from the db helper (db should implement get_banned)
+        # Use userdb.get_banned() (Database wrapper) instead of calling a Motor collection
         try:
-            b_users, b_chats = await db.get_banned()
+            if self.userdb:
+                b_users, b_chats = await self.userdb.get_banned()
+            else:
+                b_users, b_chats = [], []
         except Exception as e:
             logging.exception("Failed to get banned lists from db: %s", e)
             b_users, b_chats = [], []
@@ -58,22 +77,28 @@ class Bot(Client):
             if not mongo_url:
                 logging.warning("No MONGO_URL/DATABASE_URI provided — skipping index creation.")
             else:
-                # Create a short-lived motor client for index creation (re-using existing client is fine if available)
                 client = AsyncIOMotorClient(mongo_url, maxPoolSize=100)
                 db_col = client[DATABASE_NAME][COLLECTION_NAME]
-                # Text index on file_name and caption. Weights give higher importance to file_name.
-                await db_col.create_index(
-                    [("file_name", "text"), ("caption", "text")],
-                    default_language="english",
-                    weights={"file_name": 5, "caption": 1},
-                    background=True,
-                    name="file_name_caption_text_idx"
-                )
-                logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
                 try:
-                    client.close()
-                except Exception:
-                    pass
+                    # Try create the text index. If an equivalent index exists with different options,
+                    # catch OperationFailure and log instead of crashing.
+                    await db_col.create_index(
+                        [("file_name", "text"), ("caption", "text")],
+                        default_language="english",
+                        weights={"file_name": 5, "caption": 1},
+                        background=True,
+                        name="file_name_caption_text_idx"
+                    )
+                    logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
+                except OperationFailure as opf:
+                    # IndexOptionsConflict (code 85) occurs when an equivalent text index exists with different name/options.
+                    # Log and continue (do not abort startup).
+                    logging.warning("Could not create text index (may already exist with different options): %s", opf)
+                finally:
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
         except Exception as e:
             logging.exception("Failed to create/ensure text index: %s", e)
 
@@ -82,7 +107,6 @@ class Bot(Client):
         temp.U_NAME = me.username
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
-        # Avoid referencing an undefined `layer` variable in logs
         logging.info(f"{me.first_name} started on {me.username} (Pyrogram {__version__})")
         logging.info(LOG_STR)
         tz = pytz.timezone('Asia/Kolkata')
