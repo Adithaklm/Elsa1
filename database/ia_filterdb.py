@@ -93,10 +93,7 @@ class MediaDB:
         self.client = AsyncIOMotorClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
-# --- Backwards compatibility alias (place this AFTER MediaDB class definition) ---
-# Old code expected `from database.ia_filterdb import Media`
-# Map it to the new MediaDB class so old imports continue to work
-Media = MediaDB
+  
     async def ensure_indexes(self):
         """
         Ensure indexes exist:
@@ -116,6 +113,8 @@ Media = MediaDB
             logger.info("Indexes ensured")
         except Exception as e:
             logger.exception("Index creation failed: %s", e)
+            # place AFTER the MediaDB class definition
+Media = MediaDB
 
     async def save_file(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
