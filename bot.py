@@ -14,6 +14,8 @@ from database.ia_filterdb import Media
 from database.users_chats_db import db
 from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL, PORT
 from utils import temp
+from motor.motor_asyncio import AsyncIOMotorClient
+from info import MONGO_URL, DATABASE_URI, DATABASE_NAME, COLLECTION_NAME
 from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
 from Script import script 
@@ -58,6 +60,36 @@ class Bot(Client):
         bind_address = "0.0.0.0"
         await web.TCPSite(app, bind_address, PORT).start()
 
+    # Add this small index-creation snippet inside Bot.start() near startup.
+# Place it after you have DB connection info available and before heavy traffic.
+# This uses motor (AsyncIOMotorClient) to ensure a text index exists on file_name & caption.
+
+
+# inside Bot.start(), after you set up db connection / before sering requests:
+    # --- ensure text index (paste into start after existing startup lines) ---
+    try:
+        mongo_url = MONGO_URL or DATABASE_URI
+        if not mongo_url:
+            logging.warning("No MONGO_URL/DATABASE_URI provided — skipping index creation.")
+        else:
+            client = AsyncIOMotorClient(mongo_url, maxPoolSize=100)
+            db_col = client[DATABASE_NAME][COLLECTION_NAME]
+            # Create a text index on file_name and caption. Weights give higher importance to file_name.
+            await db_col.create_index(
+                [("file_name", "text"), ("caption", "text")],
+                default_language="english",
+                weights={"file_name": 5, "caption": 1},
+                background=True,
+                name="file_name_caption_text_idx"
+            )
+            logging.info("Ensured text index on %s.%s", DATABASE_NAME, COLLECTION_NAME)
+    except Exception as e:
+        logging.exception("Failed to create/ensure text index: %s", e)
+    # --- end index creation ---
+
+# Note: If your project already uses a motor client / db object in another module,
+# prefer reusing that client instead of creating a new AsyncIOMotorClient here.
+# The snippet above is the minimal change you can copy/paste.
     async def stop(self, *args):
         await super().stop()
         logging.info("Bot stopped. Bye.")
