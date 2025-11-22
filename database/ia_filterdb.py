@@ -88,17 +88,22 @@ async def save_file(media):
 # by fetching max_results+1, adds a projection, and sorts by textScore or _id.
 # It keeps the regex fallback for short/single-token queries.
 
+import re
+import logging
+
 logger = logging.getLogger(__name__)
+
+# ... (existing code and Media class above) ...
 
 async def get_search_results(query, file_type=None, max_results=6, offset=0, filter=False):
     """
     Faster search:
     - Use $text (text index required) for multi-word or longer queries
     - Fallback to a tighter regex for very short/single-token queries
-    - Use projection to only fetch needed fields
-    - Sort by textScore when using text search, otherwise by _id descending
+    - Use projection to only fetch needed fields (no 'score' field to keep umongo happy)
+    - Sort by _id desc (recent first)
     - Use limit(max_results + 1) to determine if there is a next page (avoid count_documents)
-    Returns: (files, next_offset, total_results_or_None)
+    Returns: (files, next_offset, None)
     """
     query = (query or "").strip()
 
@@ -134,15 +139,8 @@ async def get_search_results(query, file_type=None, max_results=6, offset=0, fil
         mongo_filter["file_type"] = file_type
 
     # Build cursor with appropriate sort & projection
-    if use_text_search:
-        # include text score and sort by it, then by recency (_id desc)
-        projection["score"] = {"$meta": "textScore"}
-        cursor = Media.find(mongo_filter, projection)
-        # Note: some drivers require sort argument as list of tuples for $meta
-        cursor.sort([("score", {"$meta": "textScore"}), ("_id", -1)])
-    else:
-        cursor = Media.find(mongo_filter, projection)
-        cursor.sort("_id", -1)
+    cursor = Media.find(mongo_filter, projection)
+    cursor.sort("_id", -1)  # use indexed sort (recent first)
 
     # Pagination: fetch one extra doc to detect next page (avoid count_documents)
     docs = await cursor.skip(offset).limit(max_results + 1).to_list(length=max_results + 1)
