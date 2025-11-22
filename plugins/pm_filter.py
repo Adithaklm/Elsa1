@@ -49,6 +49,125 @@ TIME_DURATION_UNITS = (
     ("sec", 1),
 )
 
+# Example changes to avoid BUTTON_DATA_INVALID by using short callback tokens
+# Global in-memory callback data store (replace with Redis for production)
+_CALLBACK_STORE: Dict[str, Dict[str, Any]] = {}
+_CALLBACK_LOCK = asyncio.Lock()
+# Default TTL for mapping entries (seconds)
+_CALLBACK_TTL = 300
+
+async def _cleanup_callback_store() -> None:
+    """Background cleanup to remove expired keys (optional)."""
+    while True:
+        now = time.time()
+        async with _CALLBACK_LOCK:
+            keys_to_remove = [k for k, v in _CALLBACK_STORE.items() if v["expires_at"] <= now]
+            for k in keys_to_remove:
+                _CALLBACK_STORE.pop(k, None)
+        await asyncio.sleep(30)
+
+# Start cleanup task once at import (guard if using reloads)
+try:
+    _ = asyncio.create_task(_cleanup_callback_store())
+except RuntimeError:
+    # Event loop not running at import time; start task elsewhere if necessary
+    pass
+
+async def make_callback_token(payload: Dict[str, Any], ttl: int = _CALLBACK_TTL) -> str:
+    """Create a short callback token and store the payload."""
+    token = "pmf:" + secrets.token_urlsafe(6)  # short and safe
+    expires_at = time.time() + ttl
+    async with _CALLBACK_LOCK:
+        _CALLBACK_STORE[token] = {"payload": payload, "expires_at": expires_at}
+    # Safety check (should be small)
+    if len(token.encode("utf-8")) >= 64:
+        raise ValueError("Generated callback token too long")
+    return token
+
+async def get_callback_payload(token: str) -> Optional[Dict[str, Any]]:
+    """Retrieve and optionally remove payload for token (or return None if expired/missing)."""
+    async with _CALLBACK_LOCK:
+        info = _CALLBACK_STORE.get(token)
+        if not info:
+            return None
+        if info["expires_at"] <= time.time():
+            _CALLBACK_STORE.pop(token, None)
+            return None
+        # Optionally remove to make single-use: _CALLBACK_STORE.pop(token, None)
+        return info["payload"]
+
+def build_pagination_keyboard(current_page: int, total_pages: int, extra: Dict[str, Any]) -> InlineKeyboardMarkup:
+    """Build an InlineKeyboardMarkup using short callback tokens for page buttons."""
+    buttons = []
+    # previous
+    if current_page > 1:
+        # store payload describing what 'prev' means
+        # We'll create the token lazily in async handlers; here we put placeholder keys
+        buttons.append(InlineKeyboardButton("⏮️ Prev", callback_data=f"pmf:prev:{current_page-1}"))
+    # page indicator (non-clickable button)
+    buttons.append(InlineKeyboardButton(f"{current_page}/{total_pages}", callback_data="pmf:noop"))
+    # next
+    if current_page < total_pages:
+        buttons.append(InlineKeyboardButton("Next ⏭️", callback_data=f"pmf:next:{current_page+1}"))
+
+    # IMPORTANT:
+    # Above callback_data strings must be <= 64 bytes. If you need to include more data
+    # (filter text, user id), replace the "pmf:next:NUM" with a token from make_callback_token(...) that maps to the full payload.
+    return InlineKeyboardMarkup([buttons])
+
+# Example callback handler for page navigation (pyrogram handler)
+async def next_page(client, query: CallbackQuery):
+    # 'query.data' will contain whatever you set as callback_data
+    data = query.data  # e.g. "pmf:next:3" or a short token like "pmf:Ab12CD"
+    # Prefer to support both tokenized and compact numeric forms
+    payload = None
+    if data.startswith("pmf:") and (":" in data[4:]):  # compact form used above "pmf:next:3"
+        try:
+            # parse compact tokens like pmf:next:3 or pmf:prev:2
+            parts = data.split(":")
+            action = parts[1]
+            page = int(parts[2])
+            payload = {"action": action, "page": page}
+        except Exception:
+            payload = None
+
+    # If not compact, try lookup (token)
+    if payload is None:
+        payload = await get_callback_payload(data)
+
+    if not payload:
+        # token expired or missing: inform user and remove markup
+        try:
+            await query.answer("This button expired. Please try again.", show_alert=True)
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+
+    # Now handle pagination using payload["page"]
+    page = payload.get("page")
+    # build new keyboard for new page. If you need to embed larger data in buttons,
+    # create tokens with make_callback_token(...) and use them as callback_data.
+    new_kb = build_pagination_keyboard(page, total_pages=10, extra={})
+    try:
+        await query.edit_message_reply_markup(reply_markup=new_kb)
+    except Exception as e:
+        # Defensive fallback for BUTTON_DATA_INVALID
+        msg = str(e)
+        if "BUTTON_DATA_INVALID" in msg or "button callback data is invalid" in msg:
+            # fallback: remove markup and let user use text commands or re-run the command
+            await query.answer("Pagination failed (button data invalid). Use commands to navigate.", show_alert=True)
+            try:
+                await query.edit_message_text("Pagination failed — buttons removed.", reply_markup=None)
+            except Exception:
+                pass
+        else:
+            # re-raise or log other errors
+            raise
+
+# When creating buttons that require larger payloads:
+# token = await make_callback_token({"page": 5, "filter_text": long_text})
+# button = InlineKeyboardButton("Go", callback_data=token)
 
 async def _human_time_duration(seconds):
     if seconds == 0:
