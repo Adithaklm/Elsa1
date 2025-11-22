@@ -21,6 +21,9 @@ import difflib
 import math
 import logging
 
+# Backwards compatibility for code that expects `Media`
+Media = MediaDB
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
