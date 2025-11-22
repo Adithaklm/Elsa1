@@ -21,9 +21,6 @@ import difflib
 import math
 import logging
 
-# Backwards compatibility for code that expects `Media`
-Media = MediaDB
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -248,3 +245,8 @@ if __name__ == "__main__":
         print("Results:", res)
 
     asyncio.run(_demo())
+
+# --- Backwards compatibility alias (place this AFTER MediaDB class definition) ---
+# Old code expected `from database.ia_filterdb import Media`
+# Map it to the new MediaDB class so old imports continue to work.
+Media = MediaDB
