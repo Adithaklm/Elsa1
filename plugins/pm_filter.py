@@ -1530,7 +1530,7 @@ async def advantage_spell_chok(client, msg):
             text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst))
         )
         k = await msg.reply(script.I_CUDNT.format(reqstr.mention))
-        await asyncio.sleep(8)
+        await asyncio.sleep(20)
         await k.delete()
         return
 
