@@ -1289,29 +1289,27 @@ async def auto_filter(client, msg, spoll=False):
                 search.lower(), offset=0, filter=True
             )
 
-            # SMART RETRY LAYER 🔁
-            # If no result from text search, fall back to regex-based search
+            # SMART RETRY: regex fallback
             if not files:
                 files, offset, total_results = await get_bad_files(
                     search.lower(), offset=0, filter=True
                 )
 
-            # If still nothing, then go to spell check / "not found"
+            # Still nothing → spell check or log
             if not files:
-        if settings["spell_check"]:
-            # 🔄 Progress message
-            progress_msg = await msg.reply(
-                "⏳ Your request is in progress...\n"
-                "ദയവായി അല്പം കാത്തിരിക്കൂ, options കാണിക്കും."
-            )
-            # progress_msg pass cheyyam
-            return await advantage_spell_chok(client, msg, progress_msg)
-        else:
-            await client.send_message(
-                chat_id=LOG_CHANNEL,
-                text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
-            )
-            return
+                if settings["spell_check"]:
+                    # progress message for user
+                    progress_msg = await msg.reply(
+                        "⏳ Your request is in progress...\n"
+                        "ദയവായി അല്പം കാത്തിരിക്കൂ, options കാണിക്കും."
+                    )
+                    return await advantage_spell_chok(client, msg, progress_msg)
+                else:
+                    await client.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
+                    )
+                    return
         else:
             return
     else:
