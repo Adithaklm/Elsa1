@@ -1275,58 +1275,67 @@ async def cb_handler(client: Client, query: CallbackQuery):
 async def auto_filter(client, msg, spoll=False):
     reqstr1 = msg.from_user.id if msg.from_user else 0
     reqstr = await client.get_users(reqstr1)
+
     if not spoll:
         message = msg
         settings = await get_settings(message.chat.id)
-        if message.text.startswith("/"): return  # ignore commands
-        if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
+
+        # ignore commands
+        if message.text.startswith("/"):
+            return  # ignore commands
+
+        # ignore messages starting with emoji, punctuation etc.
+        if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
+
         if len(message.text) < 100:
-        search = message.text
+            search = message.text
 
-        # 🔹 Immediately show progress to user
-        progress_msg = await msg.reply(
-            "⏳ Your request is in progress...\n"
-            "ദയവായി അല്പം കാത്തിരിക്കൂ, options കാണിക്കും."
-        )
+            # 🔹 immediately show progress to user
+            progress_msg = await msg.reply(
+                "⏳ Your request is in progress...\n"
+                "ദയവായി അല്പം കാത്തിരിക്കൂ, options കാണിക്കും."
+            )
 
-        # 1st try: normal $text search
-        files, offset, total_results = await get_search_results(
-            search.lower(), offset=0, filter=True
-        )
-
-        # SMART RETRY: regex fallback
-        if not files:
-            files, offset, total_results = await get_bad_files(
+            # 1st try: text index search
+            files, offset, total_results = await get_search_results(
                 search.lower(), offset=0, filter=True
             )
 
-        # Still nothing → spell check OR log & exit
-        if not files:
-            if settings["spell_check"]:
-                # pass progress_msg so spell check function can delete it later
-                return await advantage_spell_chok(client, msg, progress_msg)
-            else:
-                # No spell check → just log and delete progress
-                try:
-                    await progress_msg.delete()
-                except:
-                    pass
-                await client.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
+            # smart retry: regex fallback
+            if not files:
+                files, offset, total_results = await get_bad_files(
+                    search.lower(), offset=0, filter=True
                 )
-                return
 
-        # 🔹 If here: we FOUND files → remove progress message before showing results
-        try:
-            await progress_msg.delete()
-        except:
-            pass
+            # still nothing
+            if not files:
+                if settings["spell_check"]:
+                    # spell check + Google/Yandex/Report will handle + delete progress
+                    return await advantage_spell_chok(client, msg, progress_msg)
+                else:
+                    # no spell check: just log & cleanup progress message
+                    try:
+                        await progress_msg.delete()
+                    except:
+                        pass
+                    await client.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
+                    )
+                    return
+
+            # we have files → remove progress message
+            try:
+                await progress_msg.delete()
+            except:
+                pass
+
+        else:
+            return
 
     else:
-        return
-    else:
+        # callback search (next page, spellcheck, etc.)
         message = msg.message.reply_to_message  # msg will be callback query
         search, files, offset, total_results = spoll
         settings = await get_settings(message.chat.id)
