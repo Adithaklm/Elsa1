@@ -25,7 +25,8 @@ instance = Instance.from_db(db)
 
 @instance.register
 class Media(Document):
-    file_id = fields.StrField(attribute='_id')
+    # file_id stored as Mongo _id
+    file_id = fields.StrField(attribute="_id")
     file_ref = fields.StrField(allow_none=True)
     file_name = fields.StrField(required=True)
     file_size = fields.IntField(required=True)
@@ -34,11 +35,10 @@ class Media(Document):
     caption = fields.StrField(allow_none=True)
 
     class Meta:
-        # Keep your existing indexes.
-        # NOTE: '$file_name' is umongo text-index shorthand.
+        # umongo text index + compound index
         indexes = (
-            ('$file_name',),  # text index on file_name
-            (('file_name', 1), ('caption', 1)),  # compound normal index
+            ("$file_name",),  # text index on file_name (umongo shorthand)
+            (("file_name", 1), ("caption", 1)),
         )
         collection_name = COLLECTION_NAME
 
@@ -50,7 +50,35 @@ async def ensure_extra_indexes():
     """
     coll = Media.collection
     # file_type index helps when you filter by file_type
-    await coll.create_index([('file_type', 1)], name='idx_file_type')
+    await coll.create_index([("file_type", 1)], name="idx_file_type")
+
+
+# ---------------------------------------------------------------------
+# Helper: wrap raw Mongo dicts into attribute-style objects
+# ---------------------------------------------------------------------
+
+class MediaResult:
+    """
+    Lightweight wrapper so caller can use file.file_size, file.file_name, file.file_id
+    even though underlying data came as dict from Motor.
+    """
+
+    def __init__(self, doc: dict):
+        # Mongo stores _id, map to file_id for backward compatibility
+        self.file_id = str(doc.get("_id") or doc.get("file_id") or "")
+        self.file_ref = doc.get("file_ref")
+        self.file_name = doc.get("file_name")
+        self.file_size = doc.get("file_size")
+        self.file_type = doc.get("file_type")
+        self.mime_type = doc.get("mime_type")
+        self.caption = doc.get("caption")
+
+        # Keep raw document if you ever need it
+        self._raw = doc
+
+    # Optional: allow dict-like access too if needed
+    def __getitem__(self, item):
+        return self._raw.get(item)
 
 
 # ---------------------------------------------------------------------
@@ -101,7 +129,7 @@ def unpack_new_file_id(new_file_id):
             int(decoded.file_type),
             decoded.dc_id,
             decoded.media_id,
-            decoded.access_hash
+            decoded.access_hash,
         )
     )
     file_ref = encode_file_ref(decoded.file_reference)
@@ -115,7 +143,6 @@ def unpack_new_file_id(new_file_id):
 async def save_file(media):
     """Save file in database. Returns (success: bool, code: int)."""
 
-    # Try to generate our stable file_id + file_ref
     file_id, file_ref = unpack_new_file_id(media.file_id)
 
     # Normalize file_name: replace special chars with spaces
@@ -160,42 +187,45 @@ async def get_search_results(query, file_type=None, max_results=MAX_BTN, offset=
 
     - Uses textScore for relevance ranking.
     - Respects file_type filter if provided.
+    - Wraps results into MediaResult so existing code using file.file_size works.
     """
     query = normalize_query(query)
 
     if not query:
-        return [], '', 0
+        return [], "", 0
 
-    filter_query = {'$text': {'$search': query}}
+    filter_query = {"$text": {"$search": query}}
     if file_type:
-        filter_query['file_type'] = file_type
+        filter_query["file_type"] = file_type
 
     coll = Media.collection
 
     # Projection includes textScore
     projection = {
-        'file_id': 1,
-        'file_ref': 1,
-        'file_name': 1,
-        'file_size': 1,
-        'file_type': 1,
-        'mime_type': 1,
-        'caption': 1,
-        'score': {'$meta': 'textScore'},
+        "file_ref": 1,
+        "file_name": 1,
+        "file_size": 1,
+        "file_type": 1,
+        "mime_type": 1,
+        "caption": 1,
+        "score": {"$meta": "textScore"},
+        # _id is included by default unless explicitly excluded
     }
 
     total_results = await coll.count_documents(filter_query)
 
     next_offset = offset + max_results
     if next_offset > total_results:
-        next_offset = ''
+        next_offset = ""
 
     cursor = coll.find(filter_query, projection)
     # Sort by relevance (textScore)
-    cursor.sort([('score', {'$meta': 'textScore'})])
+    cursor.sort([("score", {"$meta": "textScore"})])
     cursor.skip(offset).limit(max_results)
 
-    files = await cursor.to_list(length=max_results)
+    raw_files = await cursor.to_list(length=max_results)
+    files = [MediaResult(doc) for doc in raw_files]
+
     return files, next_offset, total_results
 
 
@@ -216,44 +246,46 @@ async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter
 
     # Build regex pattern
     if not query:
-        raw_pattern = '.*'
+        raw_pattern = ".*"
     else:
         parts = query.split()
         if len(parts) == 1:
             # Single word -> word boundary-ish match
             word = re.escape(parts[0])
-            raw_pattern = rf'(\b|[\.\+\-_]){word}(\b|[\.\+\-_])'
+            raw_pattern = rf"(\b|[\.\+\-_]){word}(\b|[\.\+\-_])"
         else:
             # "spider man homecoming" -> spider.*man.*homecoming (in order)
             escaped = [re.escape(p) for p in parts]
-            raw_pattern = r'.*'.join(escaped)
+            raw_pattern = r".*".join(escaped)
 
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
     except re.error:
         # If regex is invalid, just return nothing (but keep return format)
-        return [], '', 0
+        return [], "", 0
 
     if USE_CAPTION_FILTER:
-        mongo_filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        mongo_filter = {"$or": [{"file_name": regex}, {"caption": regex}]}
     else:
-        mongo_filter = {'file_name': regex}
+        mongo_filter = {"file_name": regex}
 
     if file_type:
-        mongo_filter['file_type'] = file_type
+        mongo_filter["file_type"] = file_type
 
     total_results = await coll.count_documents(mongo_filter)
 
     next_offset = offset + max_results
     if next_offset > total_results:
-        next_offset = ''
+        next_offset = ""
 
     cursor = coll.find(mongo_filter)
     # Sort by recent (natural order descending)
-    cursor.sort([('$natural', -1)])
+    cursor.sort([("$natural", -1)])
     cursor.skip(offset).limit(max_results)
 
-    files = await cursor.to_list(length=max_results)
+    raw_files = await cursor.to_list(length=max_results)
+    files = [MediaResult(doc) for doc in raw_files]
+
     return files, next_offset, total_results
 
 
@@ -264,10 +296,12 @@ async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter
 async def get_file_details(query):
     """
     Find a single file by its file_id (our internal _id).
-    Returns a list of length 0 or 1 for compatibility with your existing code.
+    Returns a list of length 0 or 1 (wrapped MediaResult) for compatibility.
     """
     coll = Media.collection
-    mongo_filter = {'file_id': query}
+    # In DB, key is _id, not file_id
+    mongo_filter = {"_id": query}
     cursor = coll.find(mongo_filter)
-    filedetails = await cursor.to_list(length=1)
-    return filedetails
+    raw_list = await cursor.to_list(length=1)
+    files = [MediaResult(doc) for doc in raw_list]
+    return files
