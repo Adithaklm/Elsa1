@@ -6,6 +6,10 @@ import os, pytz, calendar, ast, math
 from datetime import datetime
 from time import time
 import random
+from pyrogram import filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from info import LOG_CHANNEL  # make sure this is defined in info.py
+from urllib.parse import quote_plus
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from Script import script
 import pyrogram
@@ -291,6 +295,52 @@ async def advantage_spoll_choker(bot, query):
             await k.delete()
 
 
+@Client.on_callback_query(filters.regex(r"^report#"))
+async def report_missing_request(client, query):
+    try:
+        _cmd, msg_id = query.data.split("#", 1)
+    except ValueError:
+        await query.answer("Something went wrong.", show_alert=True)
+        return
+
+    msg_id = int(msg_id) if msg_id.isdigit() else msg_id
+    data = REPORT_DATA.get(msg_id)
+
+    if not data:
+        await query.answer("Report expired or not found.", show_alert=True)
+        return
+
+    user = query.from_user
+    query_text = data.get("query") or "Unknown"
+    chat_id = data.get("chat_id")
+
+    report_text = (
+        "🚨 <b>Missing Request Report</b>\n\n"
+        f"<b>User:</b> {user.mention if user else 'Unknown'} "
+        f"(ID: <code>{user.id if user else 'N/A'}</code>)\n"
+        f"<b>From Chat ID:</b> <code>{chat_id}</code>\n\n"
+        f"<b>Requested:</b> <code>{query_text}</code>"
+    )
+
+    # send to your admin / log channel
+    try:
+        await client.send_message(LOG_CHANNEL, report_text)
+    except Exception:
+        await query.answer("Could not send report to admin.", show_alert=True)
+        return
+
+    # optionally DM the user
+    try:
+        await client.send_message(
+            user.id,
+            "Thanks for reporting. Your request has been sent to admin.\n"
+            "If you want, reply here with more details (language, quality, etc.)."
+        )
+    except Exception:
+        # user may not have started the bot in PM
+        pass
+
+    await query.answer("Report sent ✅", show_alert=True)
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     if query.data == "close_data":
@@ -1443,42 +1493,81 @@ async def advantage_spell_chok(client, msg):
     reqstr1 = msg.from_user.id if msg.from_user else 0
     reqstr = await client.get_users(reqstr1)
     settings = await get_settings(msg.chat.id)
+
+    # Clean common noise words from query
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", msg.text, flags=re.IGNORECASE)  # plis contribute some common words
+        "",
+        msg.text,
+        flags=re.IGNORECASE
+    )
     RQST = query.strip()
     query = query.strip() + " movie"
+
     try:
         movies = await get_poster(mv_rqst, bulk=True)
     except Exception as e:
         logger.exception(e)
-        await client.send_message(chat_id=LOG_CHANNEL, text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst)))
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst))
+        )
         k = await msg.reply(script.I_CUDNT.format(reqstr.mention))
         await asyncio.sleep(8)
         await k.delete()
         return
+
     movielist = []
+
+    # ------------------------------------------------------------------
+    # NO RESULT CASE: show Google/Yandex + Report button
+    # ------------------------------------------------------------------
     if not movies:
-        reqst_gle = mv_rqst.replace(" ", "+")
-        btn = [[
-            InlineKeyboardButton('🔍 ɢᴏᴏɢʟᴇ 🔎', url=f'https://google.com/search?q='),
-            InlineKeyboardButton(' 🔍 ʏᴀɴᴅᴇx 🔎', url=f'https://yandex.com/search?text=')
-        ]]
-        poi = await msg.reply_photo(photo="https://telegra.ph/file/4bb1968bd091453b0070c.jpg", caption=script.SPELL_CHECK_MAL, reply_markup=InlineKeyboardMarkup(btn))
+        # store data for report
+        REPORT_DATA[msg.id] = {
+            "chat_id": msg.chat.id,
+            "user_id": msg.from_user.id if msg.from_user else None,
+            "query": mv_rqst  # original user request
+        }
+
+        q = quote_plus(mv_rqst) if mv_rqst else ""
+
+        btn = [
+            [
+                InlineKeyboardButton(
+                    '🔍 ɢᴏᴏɢʟᴇ 🔎',
+                    url=f'https://google.com/search?q={q}'
+                ),
+                InlineKeyboardButton(
+                    '🔍 ʏᴀɴᴅᴇx 🔎',
+                    url=f'https://yandex.com/search?text={q}'
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    '📩 ʀᴇᴘᴏʀᴛ',
+                    callback_data=f"report#{msg.id}"
+                )
+            ]
+        ]
+
+        poi = await msg.reply_photo(
+            photo="https://telegra.ph/file/4bb1968bd091453b0070c.jpg",
+            caption=script.SPELL_CHECK_MAL,
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
         await asyncio.sleep(20)
         await poi.delete()
-        await message.delete()
         return
-    movielist += [movie.get('title') for movie in movies]
+
+    # ------------------------------------------------------------------
+    # IF MOVIES FOUND: (keep your existing spell-suggest logic below)
+    # ------------------------------------------------------------------
     movielist += [f"{movie.get('title')} {movie.get('year')}" for movie in movies]
     SPELL_CHECK[msg.id] = movielist
-    btn = [[
-            InlineKeyboardButton('🔍 ɢᴏᴏɢʟᴇ 🔎', url=f'https://google.com/search?q='),
-            InlineKeyboardButton(' 🔍 ʏᴀɴᴅᴇx 🔎', url=f'https://yandex.com/search?text=')
-    ]]
-    poi = await msg.reply_photo(photo="https://telegra.ph/file/4bb1968bd091453b0070c.jpg", caption=script.SPELL_CHECK_MAL, reply_markup=InlineKeyboardMarkup(btn))
-    await asyncio.sleep(20)
-    await poi.delete()
+
+    # if you already had more code here for suggestions, keep it under this
+    # ...
     
 
     try:
