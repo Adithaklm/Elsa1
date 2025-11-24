@@ -1298,14 +1298,20 @@ async def auto_filter(client, msg, spoll=False):
 
             # If still nothing, then go to spell check / "not found"
             if not files:
-                if settings["spell_check"]:
-                    return await advantage_spell_chok(client, msg)
-                else:
-                    await client.send_message(
-                        chat_id=LOG_CHANNEL,
-                        text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
-                    )
-                    return
+        if settings["spell_check"]:
+            # 🔄 Progress message
+            progress_msg = await msg.reply(
+                "⏳ Your request is in progress...\n"
+                "ദയവായി അല്പം കാത്തിരിക്കൂ, options കാണിക്കും."
+            )
+            # progress_msg pass cheyyam
+            return await advantage_spell_chok(client, msg, progress_msg)
+        else:
+            await client.send_message(
+                chat_id=LOG_CHANNEL,
+                text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
+            )
+            return
         else:
             return
     else:
@@ -1503,8 +1509,7 @@ async def auto_filter(client, msg, spoll=False):
     if spoll:
         await msg.message.delete()
 
-
-async def advantage_spell_chok(client, msg):
+async def advantage_spell_chok(client, msg, progress_msg=None):
     mv_id = msg.id
     mv_rqst = msg.text
     reqstr1 = msg.from_user.id if msg.from_user else 0
@@ -1529,18 +1534,31 @@ async def advantage_spell_chok(client, msg):
             chat_id=LOG_CHANNEL,
             text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst))
         )
+        # progress_msg ഉണ്ടെങ്കിൽ delete cheyyam
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+            except:
+                pass
         k = await msg.reply(script.I_CUDNT.format(reqstr.mention))
-        await asyncio.sleep(20)
+        await asyncio.sleep(8)
         await k.delete()
         return
-
-    movielist = []
 
     # ------------------------------------------------------------------
     # NO RESULT CASE: show Google/Yandex + Report button
     # ------------------------------------------------------------------
     if not movies:
-        # store data for report
+        # user-kku 15–20 sec "processing" feel kittan
+        await asyncio.sleep(15)
+
+        # progress message remove cheyyam
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+            except:
+                pass
+
         REPORT_DATA[msg.id] = {
             "chat_id": msg.chat.id,
             "user_id": msg.from_user.id if msg.from_user else None,
@@ -1573,7 +1591,8 @@ async def advantage_spell_chok(client, msg):
             caption=script.SPELL_CHECK_MAL,
             reply_markup=InlineKeyboardMarkup(btn)
         )
-        await asyncio.sleep(20)
+        # users-kku time kittan 30 sec vare nirtham
+        await asyncio.sleep(30)
         await poi.delete()
         return
 
@@ -1582,7 +1601,6 @@ async def advantage_spell_chok(client, msg):
     # ------------------------------------------------------------------
     movielist = []
 
-    # Base string for similarity: cleaned query if available, else raw text
     base_query = RQST or mv_rqst or ""
 
     if base_query:
@@ -1590,15 +1608,21 @@ async def advantage_spell_chok(client, msg):
             title = (m.get("title") or "").lower()
             return difflib.SequenceMatcher(None, base_query.lower(), title).ratio()
 
-        # sort movies by similarity (best first) and keep top 6
         movies = sorted(movies, key=sim, reverse=True)[:6]
 
-    # build suggestion list like before
     movielist += [f"{movie.get('title')} {movie.get('year')}" for movie in movies]
     SPELL_CHECK[msg.id] = movielist
 
-    # your existing code that shows the spell-check buttons can continue here
-    # (whatever you already had after SPELL_CHECK[msg.id] = movielist)
+    # suggestions send cheyyunnathinu mump progress_msg delete cheyyam
+    if progress_msg:
+        try:
+            await progress_msg.delete()
+        except:
+            pass
+
+    # ഇവിടെ നിന്നു തുടരും നിന്റെ existing spell-check UI code
+    # ഉദാ: spell_check_del = await msg.reply(... inline buttons ...)
+    # പിന്നെ auto_delete logic etc...
     
 
     try:
