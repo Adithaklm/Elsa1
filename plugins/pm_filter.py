@@ -6,6 +6,7 @@ import os, pytz, calendar, ast, math
 from datetime import datetime
 from time import time
 import random
+import difflib
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from info import LOG_CHANNEL  # make sure this is defined in info.py
@@ -1282,12 +1283,28 @@ async def auto_filter(client, msg, spoll=False):
             return
         if len(message.text) < 100:
             search = message.text
-            files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
+
+            # 1st try: normal $text search
+            files, offset, total_results = await get_search_results(
+                search.lower(), offset=0, filter=True
+            )
+
+            # SMART RETRY LAYER 🔁
+            # If no result from text search, fall back to regex-based search
+            if not files:
+                files, offset, total_results = await get_bad_files(
+                    search.lower(), offset=0, filter=True
+                )
+
+            # If still nothing, then go to spell check / "not found"
             if not files:
                 if settings["spell_check"]:
                     return await advantage_spell_chok(client, msg)
                 else:
-                    await client.send_message(chat_id=LOG_CHANNEL, text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search)))
+                    await client.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=(script.NORSLTS.format(reqstr.id, reqstr.mention, search))
+                    )
                     return
         else:
             return
@@ -1561,13 +1578,27 @@ async def advantage_spell_chok(client, msg):
         return
 
     # ------------------------------------------------------------------
-    # IF MOVIES FOUND: (keep your existing spell-suggest logic below)
+    # IF MOVIES FOUND: Rank suggestions by similarity ("Did you mean")
     # ------------------------------------------------------------------
+    movielist = []
+
+    # Base string for similarity: cleaned query if available, else raw text
+    base_query = RQST or mv_rqst or ""
+
+    if base_query:
+        def sim(m):
+            title = (m.get("title") or "").lower()
+            return difflib.SequenceMatcher(None, base_query.lower(), title).ratio()
+
+        # sort movies by similarity (best first) and keep top 6
+        movies = sorted(movies, key=sim, reverse=True)[:6]
+
+    # build suggestion list like before
     movielist += [f"{movie.get('title')} {movie.get('year')}" for movie in movies]
     SPELL_CHECK[msg.id] = movielist
 
-    # if you already had more code here for suggestions, keep it under this
-    # ...
+    # your existing code that shows the spell-check buttons can continue here
+    # (whatever you already had after SPELL_CHECK[msg.id] = movielist)
     
 
     try:
