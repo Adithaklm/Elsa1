@@ -38,7 +38,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-
+REPORT_DATA = {}
 BUTTONS = {}
 SPELL_CHECK = {}
 FILTER_MODE = {}
