@@ -54,19 +54,28 @@ async def save_group(bot, message):
                         await (temp.MELCOW['welcome']).delete()
                     except:
                         pass
-                temp.MELCOW['welcome'] = await message.reply_photo(
-                                                 photo=(MELCOW_IMG),
-                                                 caption=(script.MELCOW_ENG.format(u.mention, message.chat.title)),
-                                                 reply_markup=InlineKeyboardMarkup(
-                                                                         [[
-                                                                           InlineKeyboardButton('Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ', url=S_GROUP),
-                                                                           InlineKeyboardButton('Uᴘᴅᴀᴛᴇs Cʜᴀɴɴᴇʟ', url=MAIN_CHANNEL)
-                                                                        ]]
-                                                 ),
-                                                 parse_mode=enums.ParseMode.HTML
+                reply_markup = InlineKeyboardMarkup(
+                    [[
+                        InlineKeyboardButton('Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ', url=S_GROUP),
+                        InlineKeyboardButton('Uᴘᴅᴀᴛᴇs Cʜᴀɴɴᴇʟ', url=MAIN_CHANNEL)
+                    ]]
                 )
+                welcome_caption = script.MELCOW_ENG.format(u.mention, message.chat.title)
+                try:
+                    temp.MELCOW['welcome'] = await message.reply_photo(
+                        photo=MELCOW_IMG,
+                        caption=welcome_caption,
+                        reply_markup=reply_markup,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                except Forbidden:
+                    temp.MELCOW['welcome'] = await message.reply_text(
+                        text=welcome_caption,
+                        reply_markup=reply_markup,
+                        parse_mode=enums.ParseMode.HTML
+                    )
                 
-        if settings["auto_delete"]:
+        if settings["auto_delete"] and (temp.MELCOW).get('welcome') is not None: 
             await asyncio.sleep(600)
             await (temp.MELCOW['welcome']).delete()
 
