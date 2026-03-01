@@ -7,6 +7,8 @@ from database.ia_filterdb import save_file
 from info import CHANNELS, FILE_INFO_CHANNEL
 from utils import get_size
 
+logger = logging.getLogger(__name__)
+
 media_filter = filters.document | filters.video | filters.audio
 
 LANGUAGE_PATTERNS = [
@@ -75,7 +77,11 @@ async def media(bot, message):
         f"<b>Type:</b> {file_type.title()}"
     )
 
-    await bot.send_message(FILE_INFO_CHANNEL, info_text)
+    try:
+        await bot.send_message(FILE_INFO_CHANNEL, info_text)
+    except ValueError:
+        logger.error("Invalid FILE_INFO_CHANNEL configured: %s", FILE_INFO_CHANNEL)
+        return
 
     await channel_sync_db.add_synced_file(
         source_chat_id=message.chat.id,
