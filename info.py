@@ -12,6 +12,21 @@ from pyrogram import Client
 from time import time
 
 id_pattern = re.compile(r'^.\d+$')
+
+def parse_peer(value):
+    if not value:
+        return None
+
+    value = value.strip()
+    if not id_pattern.search(value):
+        return value
+
+    peer_id = int(value)
+    if (-2147483647 <= peer_id <= 999999999999) or (-1002147483647 <= peer_id < -1000000000000):
+        return peer_id
+
+    return None
+    
 def is_enabled(value, default):
     if value.lower() in ["true", "yes", "1", "enable", "y"]:
         return True
@@ -67,7 +82,7 @@ auth_users = [int(user) if id_pattern.search(user) else user for user in environ
 AUTH_USERS = (auth_users + ADMINS) if auth_users else []
 auth_channel = environ.get('AUTH_CHANNEL')
 auth_grp = environ.get('AUTH_GROUP')
-AUTH_CHANNEL = int(auth_channel) if auth_channel and id_pattern.search(auth_channel) else None
+AUTH_CHANNEL = parse_peer(auth_channel)
 AUTH_GROUPS = [int(ch) for ch in auth_grp.split()] if auth_grp else None
 support_chat_id = environ.get('SUPPORT_CHAT_ID')
 # This is required for the plugins involving the file system.
