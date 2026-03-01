@@ -121,6 +121,7 @@ MAIN_CHANNEL = environ.get('MAIN_CHANNEL',"https://t.me/+1iWSCrpI_083MDM1")
 FILE_FORWARD = environ.get('FILE_FORWARD',"https://t.me/files004")
 MSG_ALRT = environ.get('MSG_ALRT', '𝑪𝑯𝑬𝑪𝑲 & 𝑻𝑹𝒀 𝑨𝑳𝑳 𝑴𝒀 𝑭𝑬𝑨𝑻𝑼𝑹𝑬𝑺')
 FILE_CHANNEL = int(environ.get('FILE_CHANNEL', -1002148139463))
+CHANNELS = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('CHANNELS', '-1002123643586').split()]
 FILE_INFO_CHANNEL = parse_peer(environ.get('FILE_INFO_CHANNEL', '-1003847081713'))
 LOG_CHANNEL = int(environ.get('LOG_CHANNEL', 0))
 SUPPORT_CHAT = environ.get('SUPPORT_CHAT', 'Elsasupportgp')
