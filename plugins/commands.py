@@ -155,15 +155,18 @@ async def start(client, message):
         diff = int(l_msg_id) - int(f_msg_id)
         async for msg in client.iter_messages(int(f_chat_id), int(l_msg_id), int(f_msg_id)):
             if msg.media:
-                media = getattr(msg, msg.media)
+                media_attr = msg.media.value if hasattr(msg.media, "value") else str(msg.media)
+                media = getattr(msg, media_attr, None)
+                if media is None:
+                    logger.warning(f"Unsupported media attribute: {msg.media!r}")
+                    continue
                 if BATCH_FILE_CAPTION:
                     try:
                         f_caption=BATCH_FILE_CAPTION.format(file_name=getattr(media, 'file_name', ''), file_size=getattr(media, 'file_size', ''), file_caption=getattr(msg, 'caption', ''))
                     except Exception as e:
                         logger.exception(e)
                         f_caption = getattr(msg, 'caption', '')
-                else:
-                    media = getattr(msg, msg.media)
+                else: 
                     file_name = getattr(media, 'file_name', '')
                     f_caption = getattr(msg, 'caption', file_name)
                 try:
