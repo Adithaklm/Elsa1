@@ -8,7 +8,7 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
-from info import CHANNELS, ADMINS, AUTH_CHANNEL, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL
+from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNEL_LINK, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL
 from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
 from database.connections_mdb import active_connection
 import re
@@ -18,6 +18,17 @@ logger = logging.getLogger(__name__)
 
 BATCH_FILES = {}
 
+def get_auth_channel_link():
+    if AUTH_CHANNEL_LINK:
+        return AUTH_CHANNEL_LINK
+    if isinstance(AUTH_CHANNEL, str) and AUTH_CHANNEL.startswith("@"):
+        return f"https://t.me/{AUTH_CHANNEL[1:]}"
+    return "https://t.me"
+
+
+def is_batch_payload(payload):
+    return payload.startswith("BATCH-") or payload.startswith("DSTORE-")
+    
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
@@ -52,16 +63,17 @@ async def start(client, message):
             parse_mode=enums.ParseMode.HTML
         )
         return
-    if AUTH_CHANNEL and not await is_subscribed(client, message):     
+    start_payload = message.command[1] if len(message.command) > 1 else "subscribe"
+    should_force_sub = AUTH_CHANNEL and is_batch_payload(start_payload)
+    if should_force_sub and not await is_subscribed(client, message):          
         btn = [
             [
                 InlineKeyboardButton(
-                    "🤖 Join Updates Channel", url="https://t.me/+LBZJ2v2XfrVlYTQ9"
+                    "🤖 Join Updates Channel", url=get_auth_channel_link()
                 )
             ]
         ]
 
-        start_payload = message.command[1] if len(message.command) > 1 else "subscribe"
 
         if start_payload != "subscribe":
             try:
