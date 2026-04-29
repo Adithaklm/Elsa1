@@ -452,11 +452,11 @@ async def settings(client, message):
             [
                 InlineKeyboardButton(
                     'Redirect To',
-                    callback_data=f'setgs#botpm#{settings["botpm"]}#{grp_id}',
+                    callback_data='noop',
                 ),
                 InlineKeyboardButton(
-                    'Bot PM' if settings["botpm"] else 'Channel',
-                    callback_data=f'setgs#botpm#{settings["botpm"]}#{grp_id}',
+                    'Channel (Fixed)',
+                    callback_data='noop',
                 ),
             ],
             [
