@@ -574,12 +574,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     return
                 else:
                     await query.answer(f"Hᴇʏ {query.from_user.first_name}, Tʜɪs Is Nᴏᴛ Yᴏᴜʀ Mᴏᴠɪᴇ Rᴇǫᴜᴇsᴛ. Rᴇǫᴜᴇsᴛ Yᴏᴜʀ's !", show_alert=True)
-            elif settings['botpm']:
-                if clicked == typed:
-                    await query.answer(url=f"https://t.me/{temp.U_NAME}?start={ident}_{file_id}")
-                    return
-                else:
-                    await query.answer(f"Hᴇʏ {query.from_user.first_name}, Tʜɪs Is Nᴏᴛ Yᴏᴜʀ Mᴏᴠɪᴇ Rᴇǫᴜᴇsᴛ. Rᴇǫᴜᴇsᴛ Yᴏᴜʀ's !", show_alert=True)
+           
             else:
                 if clicked == typed:
                     file_send=await client.send_cached_media(
@@ -620,7 +615,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         await file_send.delete()
                 else:
                     await query.answer(f"അല്ലയോ {query.from_user.first_name} അങ്ങുന്നേ... സ്വന്തമായി റിക്യുസ്റ്റ് ചെയ്താലും 🤒\n\nRᴇǫᴜᴇsᴛ Yᴏᴜʀ Oᴡɴ Fɪʟᴇ, Dᴏɴ'ᴛ Cʟɪᴄᴋ Oᴛʜᴇʀ Rᴇᴏ̨ᴜᴇsᴛᴇᴅ Fɪʟᴇs 🤦‍♂", show_alert=True)
-                await query.answer('Cʜᴇᴄᴋ PM, I ʜᴀᴠᴇ sᴇɴᴛ ғɪʟᴇs ɪɴ PM', show_alert=True)
+                await query.answer('Cʜᴇᴄᴋ Cʜᴀɴɴᴇʟ, I ʜᴀᴠᴇ sᴇɴᴛ ғɪʟᴇs ɪɴ Cʜᴀɴɴᴇʟ', show_alert=True)
         except UserIsBlocked:
             await query.answer('𝐔𝐧𝐛𝐥𝐨𝐜𝐤 𝐭𝐡𝐞 𝐛𝐨𝐭 𝐦𝐚𝐡𝐧 !', show_alert=True)
         except PeerIdInvalid:
@@ -1205,7 +1200,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.message.edit("Your Active Connection Has Been Changed. Go To /settings.")
             return await query.answer(MSG_ALRT)
 
-        if status == "True":
+        if set_type == "botpm":
+            await save_group_settings(grpid, set_type, False)
+        elif status == "True":
             await save_group_settings(grpid, set_type, False)
         else:
             await save_group_settings(grpid, set_type, True)
@@ -1227,9 +1224,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                          callback_data=f'setgs#button#{settings["button"]}#{str(grp_id)}')
                 ],
                 [
-                    InlineKeyboardButton('Redirect To', callback_data=f'setgs#botpm#{settings["botpm"]}#{str(grp_id)}'),
-                    InlineKeyboardButton('Bot PM' if settings["botpm"] else 'Channel',
-                                         callback_data=f'setgs#botpm#{settings["botpm"]}#{str(grp_id)}')
+                    InlineKeyboardButton('Redirect To', callback_data='noop'),
+                    InlineKeyboardButton('Channel (Fixed)', callback_data='noop')
                 ],
                 [
                     InlineKeyboardButton('File Secure',
