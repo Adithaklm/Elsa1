@@ -83,7 +83,7 @@ AUTH_USERS = (auth_users + ADMINS) if auth_users else []
 auth_channel = environ.get('AUTH_CHANNEL')
 auth_grp = environ.get('AUTH_GROUP')
 AUTH_CHANNEL = parse_peer(auth_channel)
-AUTH_CHANNEL_LINK = environ.get('AUTH_CHANNEL_LINK', '')
+AUTH_CHANNEL_LINK = environ.get('AUTH_CHANNEL_LINK', 'https://t.me/+c5ERwzhENUJjODI1')
 AUTH_GROUPS = [int(ch) for ch in auth_grp.split()] if auth_grp else None
 support_chat_id = environ.get('SUPPORT_CHAT_ID')
 # This is required for the plugins involving the file system.
