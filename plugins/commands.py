@@ -8,7 +8,7 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
-from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNEL_LINK, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL
+from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNEL_LINK, AUTH_GROUPS, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL
 from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
 from database.connections_mdb import active_connection
 import re
@@ -24,6 +24,29 @@ def get_auth_channel_link():
     if isinstance(AUTH_CHANNEL, str) and AUTH_CHANNEL.startswith("@"):
         return f"https://t.me/{AUTH_CHANNEL[1:]}"
     return "https://t.me"
+
+
+def is_batch_payload(payload):
+    return payload.startswith("BATCH-") or payload.startswith("DSTORE-")
+
+
+def get_force_sub_chat():
+    if AUTH_CHANNEL:
+        return AUTH_CHANNEL
+    if AUTH_GROUPS:
+        return AUTH_GROUPS[0]
+    return None
+
+
+async def is_user_in_force_sub_chat(client, user_id):
+    chat_id = get_force_sub_chat()
+    if not chat_id:
+        return True
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+        return member.status != enums.ChatMemberStatus.BANNED
+    except Exception:
+        return False
 
 
 def is_batch_payload(payload):
@@ -64,8 +87,9 @@ async def start(client, message):
         )
         return
     start_payload = message.command[1] if len(message.command) > 1 else "subscribe"
-    should_force_sub = AUTH_CHANNEL and is_batch_payload(start_payload)
-    if should_force_sub and not await is_subscribed(client, message):          
+    force_sub_chat = get_force_sub_chat()
+    should_force_sub = force_sub_chat and is_batch_payload(start_payload)
+    if should_force_sub and not await is_user_in_force_sub_chat(client, message.from_user.id):         
         btn = [
             [
                 InlineKeyboardButton(
