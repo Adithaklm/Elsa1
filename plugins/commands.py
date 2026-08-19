@@ -163,8 +163,8 @@ async def start(client, message):
                 f_caption = f"{title}"
             try:
                 await client.send_cached_media(
-                    chat_id=message.from_user.id,
-                    file_id=msg.get("file_id"),
+                chat_id=get_file_send_chat(message),
+                file_id=msg.get("file_id"),
                     caption=f_caption,
                     protect_content=msg.get('protect', False),
                     )
@@ -172,7 +172,7 @@ async def start(client, message):
                 await asyncio.sleep(e.x)
                 logger.warning(f"Floodwait of {e.x} sec.")
                 await client.send_cached_media(
-                    chat_id=message.from_user.id,
+                    chat_id=get_file_send_chat(message),
                     file_id=msg.get("file_id"),
                     caption=f_caption,
                     protect_content=msg.get('protect', False),
@@ -269,7 +269,7 @@ async def start(client, message):
     if f_caption is None:
         f_caption = f"{files.file_name}"
     await client.send_cached_media(
-        chat_id=message.from_user.id,
+        chat_id=get_file_send_chat(message),
         file_id=file_id,
         caption=f_caption,
         reply_markup=InlineKeyboardMarkup( [ [ InlineKeyboardButton('❤️‍🔥 ᴊᴏɪɴ ᴛᴏ ᴄʜᴀɴɴᴇʟ ❤️‍🔥', url=f'https://t.me/+aOWzY1w5cZ44MzJl') ] ] ),
