@@ -8,7 +8,7 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
-from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNEL_LINK, AUTH_GROUPS, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL
+from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNEL_LINK, AUTH_GROUPS, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT, MSG_ALRT, MAIN_CHANNEL, FILE_CHANNEL
 from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
 from database.connections_mdb import active_connection
 import re
@@ -17,6 +17,10 @@ import base64
 logger = logging.getLogger(__name__)
 
 BATCH_FILES = {}
+
+def get_file_send_chat(message):
+    """Return the group/channel where files should always be sent."""
+    return FILE_CHANNEL or message.chat.id
 
 def get_auth_channel_link():
     if AUTH_CHANNEL_LINK:
@@ -233,7 +237,7 @@ async def start(client, message):
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         try:
             msg = await client.send_cached_media(
-                chat_id=message.from_user.id,
+                chat_id=get_file_send_chat(message),
                 file_id=file_id,
                 protect_content=True if pre == 'filep' else False,
                 )
