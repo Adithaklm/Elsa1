@@ -60,17 +60,35 @@ async def send_for_index(bot, message):
         last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
             chat_id  = int(("-100" + chat_id))
+        if message.text:
+        regex = re.compile(
+            r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)"
+            r"(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$"
+        )
+
+        match = regex.match(message.text)
+
+        if not match:
+            return await message.reply("Invalid link")
+
+        chat_id = match.group(4)
+        last_msg_id = int(match.group(5))
+
+        if chat_id.isnumeric():
+            chat_id = int("-100" + chat_id)
+
     elif (
-    message.forward_from_chat
-    and message.forward_from_chat.type == enums.ChatType.CHANNEL
-):
-    last_msg_id = message.forward_from_message_id
-    chat_id = (
-        message.forward_from_chat.username
-        or message.forward_from_chat.id
-    )
-else:
-    return        
+        message.forward_from_chat
+        and message.forward_from_chat.type == enums.ChatType.CHANNEL
+    ):
+        last_msg_id = message.forward_from_message_id
+        chat_id = (
+            message.forward_from_chat.username
+            or message.forward_from_chat.id
+        )
+
+    else:
+        return       
     try:
         await bot.get_chat(chat_id)
     except ChannelInvalid:
