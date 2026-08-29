@@ -2,6 +2,7 @@ import logging
 from struct import pack
 import re
 import base64
+from difflib import SequenceMatcher
 
 from pyrogram.file_id import FileId
 from pymongo.errors import DuplicateKeyError
@@ -25,7 +26,6 @@ instance = Instance.from_db(db)
 
 @instance.register
 class Media(Document):
-    # file_id stored as Mongo _id
     file_id = fields.StrField(attribute="_id")
     file_ref = fields.StrField(allow_none=True)
     file_name = fields.StrField(required=True)
@@ -35,9 +35,8 @@ class Media(Document):
     caption = fields.StrField(allow_none=True)
 
     class Meta:
-        # umongo text index + compound index
         indexes = (
-            ("$file_name",),  # text index on file_name (umongo shorthand)
+            ("$file_name",),
             (("file_name", 1), ("caption", 1)),
         )
         collection_name = COLLECTION_NAME
@@ -45,27 +44,33 @@ class Media(Document):
 
 async def ensure_extra_indexes():
     """
-    Optional: call once at startup to add any extra non-text indexes.
-    Avoid creating another text index here (MongoDB allows only one).
+    Optional: call once at startup to add extra indexes.
     """
     coll = Media.collection
-    # file_type index helps when you filter by file_type
-    await coll.create_index([("file_type", 1)], name="idx_file_type")
+
+    await coll.create_index(
+        [("file_type", 1)],
+        name="idx_file_type"
+    )
 
 
 # ---------------------------------------------------------------------
-# Helper: wrap raw Mongo dicts into attribute-style objects
+# Helper: wrap raw Mongo dicts
 # ---------------------------------------------------------------------
 
 class MediaResult:
     """
-    Lightweight wrapper so caller can use file.file_size, file.file_name, file.file_id
-    even though underlying data came as dict from Motor.
+    Lightweight wrapper so existing code can use:
+
+        file.file_size
+        file.file_name
+        file.file_id
     """
 
     def __init__(self, doc: dict):
-        # Mongo stores _id, map to file_id for backward compatibility
-        self.file_id = str(doc.get("_id") or doc.get("file_id") or "")
+        self.file_id = str(
+            doc.get("_id") or doc.get("file_id") or ""
+        )
         self.file_ref = doc.get("file_ref")
         self.file_name = doc.get("file_name")
         self.file_size = doc.get("file_size")
@@ -73,10 +78,8 @@ class MediaResult:
         self.mime_type = doc.get("mime_type")
         self.caption = doc.get("caption")
 
-        # Keep raw document if you ever need it
         self._raw = doc
 
-    # Optional: allow dict-like access too if needed
     def __getitem__(self, item):
         return self._raw.get(item)
 
@@ -87,15 +90,103 @@ class MediaResult:
 
 def normalize_query(q: str) -> str:
     """
-    Make query look more like the normalized file_name we store.
-    Replaces _, -, ., + with spaces and compresses multiple spaces.
+    Normalize search text.
+
+    Example:
+
+        Spider-Man.No Way Home
+        Spider_Man No Way Home
+
+    becomes:
+
+        Spider Man No Way Home
     """
+
     q = (q or "").strip()
+
     if not q:
         return ""
-    q = re.sub(r"(_|\-|\.|\+)", " ", q)
+
+    q = re.sub(r"(_|\-|\.+|\+)", " ", q)
     q = re.sub(r"\s+", " ", q)
+
     return q
+
+
+def normalize_for_fuzzy(q: str) -> str:
+    """
+    Strong normalization used by fuzzy matching.
+
+    Removes punctuation and spaces so:
+
+        Spider-Man
+        Spider Man
+        spider_man
+
+    are treated similarly.
+    """
+
+    q = (q or "").lower()
+
+    q = re.sub(r"[^a-z0-9]+", "", q)
+
+    return q
+
+
+def similarity(a: str, b: str) -> float:
+    """
+    Return similarity between two strings from 0.0 to 1.0.
+    """
+
+    return SequenceMatcher(
+        None,
+        normalize_for_fuzzy(a),
+        normalize_for_fuzzy(b)
+    ).ratio()
+
+
+def token_similarity(query: str, filename: str) -> float:
+    """
+    Compare individual words as well as the complete filename.
+
+    This helps with searches such as:
+
+        avengrs endgme
+
+    against:
+
+        Avengers Endgame 2019
+    """
+
+    query_tokens = normalize_query(query).lower().split()
+    file_tokens = normalize_query(filename).lower().split()
+
+    if not query_tokens or not file_tokens:
+        return 0.0
+
+    total = 0.0
+
+    for q_token in query_tokens:
+        best = 0.0
+
+        for f_token in file_tokens:
+            score = SequenceMatcher(
+                None,
+                q_token,
+                f_token
+            ).ratio()
+
+            if score > best:
+                best = score
+
+        total += best
+
+    token_score = total / len(query_tokens)
+
+    full_score = similarity(query, filename)
+
+    # Give word matching slightly more importance.
+    return (token_score * 0.70) + (full_score * 0.30)
 
 
 def encode_file_id(s: bytes) -> str:
@@ -109,6 +200,7 @@ def encode_file_id(s: bytes) -> str:
             if n:
                 r += b"\x00" + bytes([n])
                 n = 0
+
             r += bytes([i])
 
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
@@ -120,9 +212,13 @@ def encode_file_ref(file_ref: bytes) -> str:
 
 def unpack_new_file_id(new_file_id):
     """
-    Convert Pyrogram's FileId into (file_id, file_ref) suitable for Mongo.
+    Convert Pyrogram FileId into:
+
+        (file_id, file_ref)
     """
+
     decoded = FileId.decode(new_file_id)
+
     file_id = encode_file_id(
         pack(
             "<iiqq",
@@ -132,7 +228,9 @@ def unpack_new_file_id(new_file_id):
             decoded.access_hash,
         )
     )
+
     file_ref = encode_file_ref(decoded.file_reference)
+
     return file_id, file_ref
 
 
@@ -141,12 +239,24 @@ def unpack_new_file_id(new_file_id):
 # ---------------------------------------------------------------------
 
 async def save_file(media):
-    """Save file in database. Returns (success: bool, code: int)."""
+    """
+    Save file in database.
+
+    Returns:
+
+        (True, 1)  -> saved
+        (False, 0) -> duplicate
+        (False, 2) -> error
+    """
 
     file_id, file_ref = unpack_new_file_id(media.file_id)
 
-    # Normalize file_name: replace special chars with spaces
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    # Normalize filename before storing.
+    file_name = re.sub(
+        r"(_|\-|\.+|\+)",
+        " ",
+        str(media.file_name)
+    )
 
     try:
         file = Media(
@@ -156,51 +266,80 @@ async def save_file(media):
             file_size=media.file_size,
             file_type=media.file_type,
             mime_type=media.mime_type,
-            caption=media.caption.html if getattr(media, "caption", None) else None,
+            caption=(
+                media.caption.html
+                if getattr(media, "caption", None)
+                else None
+            ),
         )
+
     except ValidationError:
-        logger.exception("Error occurred while saving file in database")
+        logger.exception(
+            "Error occurred while saving file in database"
+        )
+
         return False, 2
+
     else:
         try:
             await file.commit()
+
         except DuplicateKeyError:
             logger.warning(
-                f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
+                f'{getattr(media, "file_name", "NO_FILE")} '
+                f'is already saved in database'
             )
+
             return False, 0
+
         else:
             logger.info(
-                f'{getattr(media, "file_name", "NO_FILE")} is saved to database'
+                f'{getattr(media, "file_name", "NO_FILE")} '
+                f'is saved to database'
             )
+
             return True, 1
 
 
 # ---------------------------------------------------------------------
-# Search: primary ($text) with relevance
+# Primary MongoDB text search
 # ---------------------------------------------------------------------
 
-async def get_search_results(query, file_type=None, max_results=MAX_BTN, offset=0, filter=False):
+async def get_search_results(
+    query,
+    file_type=None,
+    max_results=MAX_BTN,
+    offset=0,
+    filter=False
+):
     """
-    Primary search using MongoDB $text index.
-    Returns (files, next_offset, total_results).
+    Primary search using MongoDB $text.
 
-    - Uses textScore for relevance ranking.
-    - Respects file_type filter if provided.
-    - Wraps results into MediaResult so existing code using file.file_size works.
+    This is kept fast for normal searches.
+
+    Returns:
+
+        files,
+        next_offset,
+        total_results
     """
+
     query = normalize_query(query)
 
     if not query:
         return [], "", 0
 
-    filter_query = {"$text": {"$search": query}}
+    filter_query = {
+        "$text": {
+            "$search": query
+        }
+    }
+
     if file_type:
         filter_query["file_type"] = file_type
 
     coll = Media.collection
 
-    # Projection includes textScore
     projection = {
         "file_ref": 1,
         "file_name": 1,
@@ -208,85 +347,403 @@ async def get_search_results(query, file_type=None, max_results=MAX_BTN, offset=
         "file_type": 1,
         "mime_type": 1,
         "caption": 1,
-        "score": {"$meta": "textScore"},
-        # _id is included by default unless explicitly excluded
+        "score": {
+            "$meta": "textScore"
+        },
     }
 
-    total_results = await coll.count_documents(filter_query)
+    total_results = await coll.count_documents(
+        filter_query
+    )
 
     next_offset = offset + max_results
-    if next_offset > total_results:
+
+    if next_offset >= total_results:
         next_offset = ""
 
-    cursor = coll.find(filter_query, projection)
-    # Sort by relevance (textScore)
-    cursor.sort([("score", {"$meta": "textScore"})])
+    cursor = coll.find(
+        filter_query,
+        projection
+    )
+
+    cursor.sort(
+        [
+            (
+                "score",
+                {
+                    "$meta": "textScore"
+                }
+            )
+        ]
+    )
+
     cursor.skip(offset).limit(max_results)
 
-    raw_files = await cursor.to_list(length=max_results)
-    files = [MediaResult(doc) for doc in raw_files]
+    raw_files = await cursor.to_list(
+        length=max_results
+    )
 
-    return files, next_offset, total_results
+    files = [
+        MediaResult(doc)
+        for doc in raw_files
+    ]
+
+    # -------------------------------------------------------------
+    # IMPORTANT:
+    #
+    # If MongoDB found nothing, automatically try fuzzy search.
+    # -------------------------------------------------------------
+
+    if not files:
+        logger.info(
+            f"No normal results for '{query}'. "
+            f"Trying fuzzy search."
+        )
+
+        return await get_fuzzy_search_results(
+            query=query,
+            file_type=file_type,
+            max_results=max_results,
+            offset=offset
+        )
+
+    return (
+        files,
+        next_offset,
+        total_results
+    )
 
 
 # ---------------------------------------------------------------------
-# Search: regex fallback (for non-text index / weird queries)
+# Regex fallback
 # ---------------------------------------------------------------------
 
-async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter=False):
+async def get_bad_files(
+    query,
+    file_type=None,
+    max_results=100,
+    offset=0,
+    filter=False
+):
     """
-    Fallback search using regex on file_name (and caption if enabled).
-    Returns (files, next_offset, total_results).
+    Regex-based fallback search.
+    """
 
-    This is used when $text search is not good enough or for
-    more flexible pattern matching.
-    """
     query = normalize_query(query)
+
     coll = Media.collection
 
-    # Build regex pattern
     if not query:
         raw_pattern = ".*"
+
     else:
         parts = query.split()
+
         if len(parts) == 1:
-            # Single word -> word boundary-ish match
             word = re.escape(parts[0])
-            raw_pattern = rf"(\b|[\.\+\-_]){word}(\b|[\.\+\-_])"
+
+            raw_pattern = (
+                rf"(\b|[\.\\+\-_])"
+                rf"{word}"
+                rf"(\b|[\.\\+\-_])"
+            )
+
         else:
-            # "spider man homecoming" -> spider.*man.*homecoming (in order)
-            escaped = [re.escape(p) for p in parts]
-            raw_pattern = r".*".join(escaped)
+            escaped = [
+                re.escape(p)
+                for p in parts
+            ]
+
+            raw_pattern = (
+                r".*".join(escaped)
+            )
 
     try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        regex = re.compile(
+            raw_pattern,
+            flags=re.IGNORECASE
+        )
+
     except re.error:
-        # If regex is invalid, just return nothing (but keep return format)
         return [], "", 0
 
     if USE_CAPTION_FILTER:
-        mongo_filter = {"$or": [{"file_name": regex}, {"caption": regex}]}
+        mongo_filter = {
+            "$or": [
+                {
+                    "file_name": regex
+                },
+                {
+                    "caption": regex
+                }
+            ]
+        }
+
     else:
-        mongo_filter = {"file_name": regex}
+        mongo_filter = {
+            "file_name": regex
+        }
 
     if file_type:
         mongo_filter["file_type"] = file_type
 
-    total_results = await coll.count_documents(mongo_filter)
+    total_results = await coll.count_documents(
+        mongo_filter
+    )
 
     next_offset = offset + max_results
-    if next_offset > total_results:
+
+    if next_offset >= total_results:
         next_offset = ""
 
-    cursor = coll.find(mongo_filter)
-    # Sort by recent (natural order descending)
-    cursor.sort([("$natural", -1)])
+    cursor = coll.find(
+        mongo_filter
+    )
+
+    cursor.sort(
+        [
+            (
+                "$natural",
+                -1
+            )
+        ]
+    )
+
     cursor.skip(offset).limit(max_results)
 
-    raw_files = await cursor.to_list(length=max_results)
-    files = [MediaResult(doc) for doc in raw_files]
+    raw_files = await cursor.to_list(
+        length=max_results
+    )
 
-    return files, next_offset, total_results
+    files = [
+        MediaResult(doc)
+        for doc in raw_files
+    ]
+
+    return (
+        files,
+        next_offset,
+        total_results
+    )
+
+
+# ---------------------------------------------------------------------
+# FUZZY / SPELLING-TOLERANT SEARCH
+# ---------------------------------------------------------------------
+
+async def get_fuzzy_search_results(
+    query,
+    file_type=None,
+    max_results=MAX_BTN,
+    offset=0,
+    threshold=0.55
+):
+    """
+    Spelling-tolerant search.
+
+    Example:
+
+        User:
+            Avengrs Endgme
+
+        Database:
+            Avengers Endgame 2019
+
+    The database filename receives a similarity score.
+
+    IMPORTANT:
+    This is a fallback search, not the primary search.
+    """
+
+    query = normalize_query(query)
+
+    if not query:
+        return [], "", 0
+
+    coll = Media.collection
+
+    mongo_filter = {}
+
+    if file_type:
+        mongo_filter["file_type"] = file_type
+
+    # -------------------------------------------------------------
+    # Fetch only fields required for fuzzy matching.
+    # -------------------------------------------------------------
+
+    projection = {
+        "_id": 1,
+        "file_ref": 1,
+        "file_name": 1,
+        "file_size": 1,
+        "file_type": 1,
+        "mime_type": 1,
+        "caption": 1,
+    }
+
+    # -------------------------------------------------------------
+    # Prevent an accidental unlimited database operation.
+    #
+    # The fuzzy fallback is only used when normal search fails.
+    # -------------------------------------------------------------
+
+    cursor = coll.find(
+        mongo_filter,
+        projection
+    )
+
+    raw_files = await cursor.to_list(
+        length=10000
+    )
+
+    if not raw_files:
+        return [], "", 0
+
+    scored_results = []
+
+    query_normalized = normalize_for_fuzzy(
+        query
+    )
+
+    for doc in raw_files:
+
+        file_name = str(
+            doc.get("file_name") or ""
+        )
+
+        if not file_name:
+            continue
+
+        score = token_similarity(
+            query,
+            file_name
+        )
+
+        # ---------------------------------------------------------
+        # Additional substring bonus.
+        # ---------------------------------------------------------
+
+        normalized_filename = normalize_for_fuzzy(
+            file_name
+        )
+
+        if query_normalized in normalized_filename:
+            score += 0.20
+
+        # ---------------------------------------------------------
+        # Exact token bonus.
+        # ---------------------------------------------------------
+
+        query_tokens = (
+            normalize_query(query)
+            .lower()
+            .split()
+        )
+
+        filename_tokens = (
+            normalize_query(file_name)
+            .lower()
+            .split()
+        )
+
+        exact_tokens = 0
+
+        for token in query_tokens:
+            if token in filename_tokens:
+                exact_tokens += 1
+
+        if query_tokens:
+            score += (
+                exact_tokens /
+                len(query_tokens)
+            ) * 0.15
+
+        # Maximum score = 1.0
+        score = min(score, 1.0)
+
+        if score >= threshold:
+            scored_results.append(
+                (
+                    score,
+                    doc
+                )
+            )
+
+    # -------------------------------------------------------------
+    # Highest similarity first.
+    # -------------------------------------------------------------
+
+    scored_results.sort(
+        key=lambda item: item[0],
+        reverse=True
+    )
+
+    total_results = len(
+        scored_results
+    )
+
+    # -------------------------------------------------------------
+    # Pagination
+    # -------------------------------------------------------------
+
+    start = offset
+    end = offset + max_results
+
+    selected = scored_results[
+        start:end
+    ]
+
+    files = []
+
+    for score, doc in selected:
+
+        result = MediaResult(doc)
+
+        # Keep score available if needed later.
+        result.search_score = score
+
+        files.append(result)
+
+    if end >= total_results:
+        next_offset = ""
+
+    else:
+        next_offset = end
+
+    logger.info(
+        f"Fuzzy search '{query}' -> "
+        f"{total_results} results"
+    )
+
+    return (
+        files,
+        next_offset,
+        total_results
+    )
+
+
+# ---------------------------------------------------------------------
+# Optional direct fuzzy search
+# ---------------------------------------------------------------------
+
+async def get_fuzzy_files(
+    query,
+    file_type=None,
+    max_results=MAX_BTN,
+    offset=0
+):
+    """
+    Public helper for fuzzy search.
+
+    Can be used directly by other plugins if needed.
+    """
+
+    return await get_fuzzy_search_results(
+        query=query,
+        file_type=file_type,
+        max_results=max_results,
+        offset=offset
+    )
 
 
 # ---------------------------------------------------------------------
@@ -295,13 +752,26 @@ async def get_bad_files(query, file_type=None, max_results=100, offset=0, filter
 
 async def get_file_details(query):
     """
-    Find a single file by its file_id (our internal _id).
-    Returns a list of length 0 or 1 (wrapped MediaResult) for compatibility.
+    Find a single file by its internal file_id.
     """
+
     coll = Media.collection
-    # In DB, key is _id, not file_id
-    mongo_filter = {"_id": query}
-    cursor = coll.find(mongo_filter)
-    raw_list = await cursor.to_list(length=1)
-    files = [MediaResult(doc) for doc in raw_list]
+
+    mongo_filter = {
+        "_id": query
+    }
+
+    cursor = coll.find(
+        mongo_filter
+    )
+
+    raw_list = await cursor.to_list(
+        length=1
+    )
+
+    files = [
+        MediaResult(doc)
+        for doc in raw_list
+    ]
+
     return files
