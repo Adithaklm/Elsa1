@@ -313,34 +313,50 @@ async def get_search_results(
     filter=False
 ):
     """
-    Primary search using MongoDB $text.
+    Smart movie search.
 
-    This is kept fast for normal searches.
-
-    Returns:
-
-        files,
-        next_offset,
-        total_results
+    Supports:
+    - punctuation differences
+    - different word order
+    - year searches
+    - partial movie names
+    - small spelling mistakes
     """
 
-    query = normalize_query(query)
+    query = (query or "").strip().lower()
 
     if not query:
         return [], "", 0
 
-    filter_query = {
+    coll = Media.collection
+
+    # ---------------------------------------------------------
+    # Normalize query
+    # ---------------------------------------------------------
+
+    query = re.sub(r"[_\-.+,()\[\]{}]", " ", query)
+    query = re.sub(r"\s+", " ", query).strip()
+
+    query_words = query.split()
+
+    if not query_words:
+        return [], "", 0
+
+    # ---------------------------------------------------------
+    # 1. Normal MongoDB search
+    # ---------------------------------------------------------
+
+    mongo_query = {
         "$text": {
             "$search": query
         }
     }
 
     if file_type:
-        filter_query["file_type"] = file_type
-
-    coll = Media.collection
+        mongo_query["file_type"] = file_type
 
     projection = {
+        "_id": 1,
         "file_ref": 1,
         "file_name": 1,
         "file_size": 1,
@@ -349,20 +365,11 @@ async def get_search_results(
         "caption": 1,
         "score": {
             "$meta": "textScore"
-        },
+        }
     }
 
-    total_results = await coll.count_documents(
-        filter_query
-    )
-
-    next_offset = offset + max_results
-
-    if next_offset >= total_results:
-        next_offset = ""
-
     cursor = coll.find(
-        filter_query,
+        mongo_query,
         projection
     )
 
@@ -379,40 +386,265 @@ async def get_search_results(
 
     cursor.skip(offset).limit(max_results)
 
-    raw_files = await cursor.to_list(
+    normal_results = await cursor.to_list(
         length=max_results
     )
 
-    files = [
-        MediaResult(doc)
-        for doc in raw_files
-    ]
+    # If normal search works, use it.
+    if normal_results:
+        files = [
+            MediaResult(doc)
+            for doc in normal_results
+        ]
 
-    # -------------------------------------------------------------
-    # IMPORTANT:
+        total = await coll.count_documents(
+            mongo_query
+        )
+
+        next_offset = (
+            offset + max_results
+            if offset + max_results < total
+            else ""
+        )
+
+        return files, next_offset, total
+
+    # ---------------------------------------------------------
+    # 2. Smart token search
     #
-    # If MongoDB found nothing, automatically try fuzzy search.
-    # -------------------------------------------------------------
+    # Example:
+    #
+    # "I Nobody 2026"
+    #
+    # matches:
+    #
+    # "I, Nobody (2026) Malayalam..."
+    # ---------------------------------------------------------
 
-    if not files:
-        logger.info(
-            f"No normal results for '{query}'. "
-            f"Trying fuzzy search."
-        )
+    # Don't fuzzy-search extremely short queries.
+    if len(query) < 3:
+        return [], "", 0
 
-        return await get_fuzzy_search_results(
-            query=query,
-            file_type=file_type,
-            max_results=max_results,
-            offset=offset
-        )
+    # Build regex for important words.
+    #
+    # MongoDB searches each word independently.
+    # This avoids the punctuation problem with:
+    #
+    # I, Nobody (2026)
+    #
 
-    return (
-        files,
-        next_offset,
-        total_results
+    word_conditions = []
+
+    for word in query_words:
+
+        # Ignore one-character words such as "I"
+        # during the database filtering stage.
+        #
+        # They will NOT prevent the movie from matching.
+        if len(word) <= 1:
+            continue
+
+        escaped = re.escape(word)
+
+        word_conditions.append({
+            "file_name": {
+                "$regex": escaped,
+                "$options": "i"
+            }
+        })
+
+    if not word_conditions:
+        return [], "", 0
+
+    token_query = {
+        "$and": word_conditions
+    }
+
+    if file_type:
+        token_query["file_type"] = file_type
+
+    token_cursor = coll.find(
+        token_query,
+        {
+            "_id": 1,
+            "file_ref": 1,
+            "file_name": 1,
+            "file_size": 1,
+            "file_type": 1,
+            "mime_type": 1,
+            "caption": 1
+        }
     )
 
+    token_docs = await token_cursor.to_list(
+        length=MAX_BTN * 5
+    )
+
+    if token_docs:
+        files = [
+            MediaResult(doc)
+            for doc in token_docs[offset:offset + max_results]
+        ]
+
+        total = len(token_docs)
+
+        next_offset = (
+            offset + max_results
+            if offset + max_results < total
+            else ""
+        )
+
+        return files, next_offset, total
+
+    # ---------------------------------------------------------
+    # 3. Fuzzy spelling search
+    #
+    # Only used when normal + token search fail.
+    # ---------------------------------------------------------
+
+    logger.info(
+        f"No exact/token results for '{query}'. "
+        f"Trying fuzzy search."
+    )
+
+    # Extract useful words.
+    fuzzy_words = [
+        word
+        for word in query_words
+        if len(word) >= 3
+    ]
+
+    if not fuzzy_words:
+        return [], "", 0
+
+    # Search using the first useful word first.
+    #
+    # This prevents scanning the entire database for queries
+    # such as "no".
+    first_word = fuzzy_words[0]
+
+    fuzzy_candidates = await coll.find(
+        {
+            "file_name": {
+                "$regex": re.escape(first_word[:3]),
+                "$options": "i"
+            }
+        },
+        {
+            "_id": 1,
+            "file_ref": 1,
+            "file_name": 1,
+            "file_size": 1,
+            "file_type": 1,
+            "mime_type": 1,
+            "caption": 1
+        }
+    ).to_list(length=5000)
+
+    if not fuzzy_candidates:
+        return [], "", 0
+
+    scored = []
+
+    for doc in fuzzy_candidates:
+
+        filename = str(
+            doc.get("file_name") or ""
+        ).lower()
+
+        clean_filename = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            filename
+        )
+
+        filename_words = clean_filename.split()
+
+        if not filename_words:
+            continue
+
+        total_score = 0
+        matched_words = 0
+
+        for query_word in fuzzy_words:
+
+            best_score = 0
+
+            for filename_word in filename_words:
+
+                score = SequenceMatcher(
+                    None,
+                    query_word,
+                    filename_word
+                ).ratio()
+
+                if score > best_score:
+                    best_score = score
+
+            # Require reasonably close spelling.
+            if best_score >= 0.70:
+                matched_words += 1
+                total_score += best_score
+
+        if not fuzzy_words:
+            continue
+
+        match_ratio = (
+            matched_words / len(fuzzy_words)
+        )
+
+        if matched_words == 0:
+            continue
+
+        average_score = (
+            total_score / matched_words
+        )
+
+        final_score = (
+            average_score * 0.70
+            + match_ratio * 0.30
+        )
+
+        # Require most search words to match.
+        if (
+            final_score >= 0.72
+            and match_ratio >= 0.50
+        ):
+            scored.append(
+                (
+                    final_score,
+                    doc
+                )
+            )
+
+    # Highest-quality matches first.
+    scored.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
+    total = len(scored)
+
+    selected = scored[
+        offset:offset + max_results
+    ]
+
+    files = [
+        MediaResult(doc)
+        for score, doc in selected
+    ]
+
+    next_offset = (
+        offset + max_results
+        if offset + max_results < total
+        else ""
+    )
+
+    logger.info(
+        f"Fuzzy search '{query}' -> {total} results"
+    )
+
+    return files, next_offset, total
 
 # ---------------------------------------------------------------------
 # Regex fallback
