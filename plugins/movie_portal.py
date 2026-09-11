@@ -136,16 +136,16 @@ async def poster_file(request):
     return web.Response(body=poster["data"], content_type=poster.get("content_type", "image/jpeg"), headers={"Cache-Control": "public, max-age=86400"})
 
 
-def form(m=None, auth="", poster_upload_url=""):
+def form(m=None, auth="", uploaded_poster=""):
     m = m or {}
     mid = str(m.get("_id", ""))
     action = f"/admin/movie/{mid}/save" if mid else "/admin/movie/save"
     r = m.get("status", "coming_soon")
+    poster_value = uploaded_poster or str(m.get("poster", ""))
     hidden = f'<input type="hidden" name="auth" value="{esc(auth, True)}">' if auth else ''
-    current_poster = str(m.get("poster", ""))
-    upload_box = f'''<div class="uploadbox"><b>📤 Upload Poster</b><p style="margin:6px 0">JPG/JPEG or PNG • Max 8 MB</p><form method="post" action="{esc(poster_upload_url, True)}" enctype="multipart/form-data"><input type="file" name="poster" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required><button type="submit">Upload Poster</button></form></div>'''
-    poster_field = f'''<label>Poster<input name="poster" value="{esc(current_poster, True)}" placeholder="Uploaded poster will appear here"><div id="poster-status">{upload_box}</div></label>'''
-    return f'''<form method="post" action="{action}" class="formgrid">{hidden}<label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label>{poster_field}<label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button>💾 Save Movie</button> <a class="btn secondary" href="{_auth_url(auth, '/admin')}">Cancel</a></div></form>'''
+    upload_url = _auth_url(auth, "/admin/poster/upload")
+    upload_box = f'''<div class="uploadbox"><b>📤 Upload Poster</b><p style="margin:6px 0">JPG/JPEG or PNG • Max 8 MB</p><form method="post" action="{upload_url}" enctype="multipart/form-data"><input type="file" name="poster" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required><button type="submit">Upload Poster</button></form></div>'''
+    return f'''<form method="post" action="{action}" class="formgrid">{hidden}<label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label><label>Poster<div>{upload_box}<input name="poster" value="{esc(poster_value, True)}" placeholder="Upload a poster first, then use the generated path"></div></label><label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button>💾 Save Movie</button> <a class="btn secondary" href="{_auth_url(auth, '/admin')}">Cancel</a></div></form>'''
 
 
 async def login(request):
@@ -172,11 +172,15 @@ async def admin(request):
         raise web.HTTPFound("/admin/login")
     movies = await _movies.find({}).sort("created_at", -1).to_list(200)
     poster_id = request.query.get("poster", "")
-    poster_notice = ""
-    if poster_id:
-        poster_notice = f'<p style="color:var(--green)">✅ Poster uploaded. Copy this URL into Poster: <code>{esc("/poster/" + poster_id)}</code></p>'
-    rows = ''.join(f'<tr><td><b>{esc(m.get("title"))}</b><br><small>{esc(m.get("status"))} • {esc(m.get("release_date"))}</small></td><td><a class="btn secondary" href="{_auth_url(auth, f"/admin/movie/{m["_id"]}")}">Edit</a> <form style="display:inline" method="post" action="/admin/movie/{m["_id"]}/delete"><input type="hidden" name="auth" value="{esc(auth, True)}"><button class="danger" onclick="return confirm(\'Delete this movie?\')">Delete</button></form></td></tr>' for m in movies)
-    body = f'<div class="adminbox"><h1>🎬 Movie Admin</h1><p>Add, edit or delete movies shown publicly.</p>{poster_notice}{form(auth=auth, poster_upload_url=_auth_url(auth, "/admin/poster/upload"))}</div><div class="adminbox"><h2>Movies ({len(movies)})</h2><div class="tablewrap"><table><tr><th>Movie</th><th>Actions</th></tr>{rows}</table></div><br><a class="btn secondary" href="/admin/logout">Logout</a></div>'
+    uploaded_poster = f"/poster/{poster_id}" if poster_id else ""
+    poster_notice = f'<p style="color:var(--green)">✅ Poster uploaded successfully. It is ready in the Poster field below.</p>' if poster_id else ''
+    rows = []
+    for m in movies:
+        mid = str(m["_id"])
+        edit_url = _auth_url(auth, f"/admin/movie/{mid}")
+        delete_action = f"/admin/movie/{mid}/delete"
+        rows.append(f'<tr><td><b>{esc(m.get("title"))}</b><br><small>{esc(m.get("status"))} • {esc(m.get("release_date"))}</small></td><td><a class="btn secondary" href="{edit_url}">Edit</a> <form style="display:inline" method="post" action="{delete_action}"><input type="hidden" name="auth" value="{esc(auth, True)}"><button class="danger" onclick="return confirm(\'Delete this movie?\')">Delete</button></form></td></tr>')
+    body = f'<div class="adminbox"><h1>🎬 Movie Admin</h1><p>Add, edit or delete movies shown publicly.</p>{poster_notice}{form(auth=auth, uploaded_poster=uploaded_poster)}</div><div class="adminbox"><h2>Movies ({len(movies)})</h2><div class="tablewrap"><table><tr><th>Movie</th><th>Actions</th></tr>{"".join(rows)}</table></div><br><a class="btn secondary" href="/admin/logout">Logout</a></div>'
     return web.Response(text=page("Admin", body), content_type="text/html")
 
 
@@ -190,7 +194,7 @@ async def edit_page(request):
         m = None
     if not m:
         raise web.HTTPNotFound(text="Movie not found")
-    return web.Response(text=page("Edit Movie", f'<div class="adminbox"><h1>✏️ Edit Movie</h1>{form(m, auth, _auth_url(auth, "/admin/poster/upload"))}</div>'), content_type="text/html")
+    return web.Response(text=page("Edit Movie", f'<div class="adminbox"><h1>✏️ Edit Movie</h1>{form(m, auth)}</div>'), content_type="text/html")
 
 
 async def save(request, movie_id=None):
