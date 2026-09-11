@@ -106,6 +106,10 @@ SHORTLINK_URL = environ.get('SHORTLINK_URL', 'shorturllink.in')
 SHORTLINK_API = environ.get('SHORTLINK_API', '3a3935e37c74a2384f7a689c414f078ab6320785')
 IS_SHORTLINK = bool(environ.get('IS_SHORTLINK', False))
 
+# Movie release portal
+MOVIE_WEB_URL = environ.get('MOVIE_WEB_URL', '').strip().rstrip('/')
+MOVIE_ADMIN_PASSWORD = environ.get('MOVIE_ADMIN_PASSWORD', '')
+
 #Auto approve 
 #In private group or channel must enable request admin approval 
 CHAT_ID = [int(app_chat_id) if id_pattern.search(app_chat_id) else app_chat_id for app_chat_id in environ.get('CHAT_ID', '0').split()]
@@ -150,4 +154,5 @@ LOG_STR += (f"CUSTOM_FILE_CAPTION enabled with value {CUSTOM_FILE_CAPTION}, your
 LOG_STR += ("Long IMDB storyline enabled." if LONG_IMDB_DESCRIPTION else "LONG_IMDB_DESCRIPTION is disabled , Plot will be shorter.\n")
 LOG_STR += ("Spell Check Mode Is Enabled, bot will be suggesting related movies if movie not found\n" if SPELL_CHECK_REPLY else "SPELL_CHECK_REPLY Mode disabled\n")
 LOG_STR += (f"MAX_LIST_ELM Found, long list will be shortened to first {MAX_LIST_ELM} elements\n" if MAX_LIST_ELM else "Full List of casts and crew will be shown in imdb template, restrict them by adding a value to MAX_LIST_ELM\n")
-LOG_STR += f"Your current IMDB template is {IMDB_TEMPLATE}"
+LOG_STR += f"Your current IMDB template is {IMDB_TEMPLATE}\n"
+LOG_STR += (f"Movie Portal enabled at {MOVIE_WEB_URL}." if MOVIE_WEB_URL else "Movie Portal URL is not configured yet.")
