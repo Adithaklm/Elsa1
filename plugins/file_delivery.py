@@ -22,6 +22,20 @@ def _auth_link():
     return "https://t.me"
 
 
+def _file_channel_buttons():
+    """Restore the buttons shown under files in FILE_CHANNEL."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇮🇳 Mᴀʟ", callback_data="btmal"),
+            InlineKeyboardButton("🇮🇳 Hɪɴ", callback_data="bthin"),
+            InlineKeyboardButton("🇮🇶 Aʀʙ", callback_data="btarb"),
+        ],
+        [
+            InlineKeyboardButton("Jᴏɪɴ Oᴜʀ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url="https://t.me/cenEma9")
+        ],
+    ])
+
+
 async def _deliver_to_file_channel(client, file_id, title, caption, protect=False):
     if not FILE_CHANNEL:
         raise RuntimeError("FILE_CHANNEL is not configured")
@@ -30,6 +44,7 @@ async def _deliver_to_file_channel(client, file_id, title, caption, protect=Fals
         file_id=file_id,
         caption=caption or title or "",
         protect_content=protect,
+        reply_markup=_file_channel_buttons(),
     )
 
 
@@ -161,7 +176,11 @@ async def dstore_to_file_channel(client, message):
                     else:
                         caption = getattr(msg, "caption", "") or getattr(media, "file_name", "")
                 else:
-                    copied = await msg.copy(FILE_CHANNEL, protect_content=protect == "/pbatch")
+                    copied = await msg.copy(
+                        FILE_CHANNEL,
+                        protect_content=protect == "/pbatch",
+                        reply_markup=_file_channel_buttons(),
+                    )
                     if copied and getattr(copied, "link", None):
                         links.append(copied.link)
                     await asyncio.sleep(1)
@@ -171,13 +190,18 @@ async def dstore_to_file_channel(client, message):
                     FILE_CHANNEL,
                     caption=caption,
                     protect_content=protect == "/pbatch",
+                    reply_markup=_file_channel_buttons(),
                 )
                 if copied and getattr(copied, "link", None):
                     links.append(copied.link)
             except FloodWait as e:
                 await asyncio.sleep(e.x)
                 try:
-                    copied = await msg.copy(FILE_CHANNEL, protect_content=protect == "/pbatch")
+                    copied = await msg.copy(
+                        FILE_CHANNEL,
+                        protect_content=protect == "/pbatch",
+                        reply_markup=_file_channel_buttons(),
+                    )
                     if copied and getattr(copied, "link", None):
                         links.append(copied.link)
                 except Exception:
