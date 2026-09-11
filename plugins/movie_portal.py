@@ -22,12 +22,15 @@ def esc(value, quote=False):
     return html.escape(str(value or ""), quote=quote)
 
 
+def _secret():
+    return hashlib.sha256(MOVIE_ADMIN_PASSWORD.encode("utf-8")).digest()
+
+
 def _session_token():
-    now = str(int(time.time()))
-    nonce = secrets.token_urlsafe(16)
-    payload = f"{now}.{nonce}"
-    secret = hashlib.sha256(MOVIE_ADMIN_PASSWORD.encode("utf-8")).digest()
-    signature = hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    issued_at = str(int(time.time()))
+    nonce = secrets.token_urlsafe(24)
+    payload = f"{issued_at}.{nonce}"
+    signature = hmac.new(_secret(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload}.{signature}"
 
 
@@ -38,11 +41,11 @@ def admin_ok(request):
     try:
         issued_at, nonce, signature = token.split(".", 2)
         issued_at = int(issued_at)
-        if issued_at <= 0 or time.time() - issued_at > _SESSION_TTL:
+        now = int(time.time())
+        if issued_at <= 0 or issued_at > now + 60 or now - issued_at > _SESSION_TTL:
             return False
         payload = f"{issued_at}.{nonce}"
-        secret = hashlib.sha256(MOVIE_ADMIN_PASSWORD.encode("utf-8")).digest()
-        expected = hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        expected = hmac.new(_secret(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected)
     except (ValueError, TypeError):
         return False
@@ -99,16 +102,16 @@ async def login(request):
     if request.method == "GET":
         return web.Response(text=page("Admin Login", '<div class="adminbox"><h1>🔐 Admin Login</h1><form method="post"><input type="password" name="password" placeholder="Admin password" required><br><br><button>Login</button></form></div>'), content_type="text/html")
     data = await request.post()
-    if not MOVIE_ADMIN_PASSWORD or data.get("password") != MOVIE_ADMIN_PASSWORD:
+    if not MOVIE_ADMIN_PASSWORD or not hmac.compare_digest(str(data.get("password", "")), MOVIE_ADMIN_PASSWORD):
         raise web.HTTPUnauthorized(text="Invalid password")
     response = web.HTTPFound("/admin")
-    response.set_cookie(_COOKIE_NAME, _session_token(), httponly=True, samesite="Lax", max_age=_SESSION_TTL, secure=True)
+    response.set_cookie(_COOKIE_NAME, _session_token(), max_age=_SESSION_TTL, httponly=True, samesite="Lax", secure=False, path="/")
     raise response
 
 
 async def logout(request):
     response = web.HTTPFound("/admin/login")
-    response.del_cookie(_COOKIE_NAME)
+    response.del_cookie(_COOKIE_NAME, path="/")
     raise response
 
 
