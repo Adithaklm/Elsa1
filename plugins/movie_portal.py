@@ -102,13 +102,13 @@ async def login(request):
     if not MOVIE_ADMIN_PASSWORD or data.get("password") != MOVIE_ADMIN_PASSWORD:
         raise web.HTTPUnauthorized(text="Invalid password")
     response = web.HTTPFound("/admin")
-    response.set_cookie(_COOKIE_NAME, _session_token(), httponly=True, samesite="Lax", max_age=_SESSION_TTL, secure=False, path="/")
+    response.set_cookie(_COOKIE_NAME, _session_token(), httponly=True, samesite="Lax", max_age=_SESSION_TTL, secure=True)
     raise response
 
 
 async def logout(request):
     response = web.HTTPFound("/admin/login")
-    response.del_cookie(_COOKIE_NAME, path="/")
+    response.del_cookie(_COOKIE_NAME)
     raise response
 
 
