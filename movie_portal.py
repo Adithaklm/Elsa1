@@ -1,5 +1,8 @@
 import html
+import hashlib
+import hmac
 import secrets
+import time
 from datetime import datetime
 
 import motor.motor_asyncio
@@ -10,16 +13,39 @@ from info import DATABASE_NAME, DATABASE_URI, MOVIE_ADMIN_PASSWORD
 
 _client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URI)
 _movies = _client[DATABASE_NAME].movie_portal
-_sessions = set()
+
+_SESSION_TTL = 86400
+_COOKIE_NAME = "elsa_admin"
 
 
 def esc(value, quote=False):
     return html.escape(str(value or ""), quote=quote)
 
 
+def _session_token():
+    now = str(int(time.time()))
+    nonce = secrets.token_urlsafe(16)
+    payload = f"{now}.{nonce}"
+    secret = hashlib.sha256(MOVIE_ADMIN_PASSWORD.encode("utf-8")).digest()
+    signature = hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
 def admin_ok(request):
-    token = request.cookies.get("elsa_admin")
-    return bool(MOVIE_ADMIN_PASSWORD and token in _sessions)
+    token = request.cookies.get(_COOKIE_NAME, "")
+    if not MOVIE_ADMIN_PASSWORD or not token:
+        return False
+    try:
+        issued_at, nonce, signature = token.split(".", 2)
+        issued_at = int(issued_at)
+        if issued_at <= 0 or time.time() - issued_at > _SESSION_TTL:
+            return False
+        payload = f"{issued_at}.{nonce}"
+        secret = hashlib.sha256(MOVIE_ADMIN_PASSWORD.encode("utf-8")).digest()
+        expected = hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature, expected)
+    except (ValueError, TypeError):
+        return False
 
 
 def page(title, body):
@@ -49,9 +75,12 @@ async def home(request):
 
 
 async def detail(request):
-    try: movie = await _movies.find_one({"_id": ObjectId(request.match_info["id"])})
-    except Exception: movie = None
-    if not movie: raise web.HTTPNotFound(text="Movie not found")
+    try:
+        movie = await _movies.find_one({"_id": ObjectId(request.match_info["id"])})
+    except Exception:
+        movie = None
+    if not movie:
+        raise web.HTTPNotFound(text="Movie not found")
     poster = esc(movie.get("poster"), True)
     poster_html = f'<img src="{poster}" alt="{esc(movie.get("title"), True)}">' if poster else ''
     body = f'<div class="detail"><div class="poster">{poster_html}</div><div><h1>{esc(movie.get("title"))}</h1><p>{esc(movie.get("language"))} • {esc(movie.get("genre"))} • {esc(movie.get("release_date"))}</p><p>{esc(movie.get("description"))}</p></div></div>'
@@ -67,19 +96,25 @@ def form(m=None):
 
 
 async def login(request):
-    if request.method == "GET": return web.Response(text=page("Admin Login", '<div class="adminbox"><h1>🔐 Admin Login</h1><form method="post"><input type="password" name="password" placeholder="Admin password" required><br><br><button>Login</button></form></div>'), content_type="text/html")
+    if request.method == "GET":
+        return web.Response(text=page("Admin Login", '<div class="adminbox"><h1>🔐 Admin Login</h1><form method="post"><input type="password" name="password" placeholder="Admin password" required><br><br><button>Login</button></form></div>'), content_type="text/html")
     data = await request.post()
-    if not MOVIE_ADMIN_PASSWORD or data.get("password") != MOVIE_ADMIN_PASSWORD: raise web.HTTPUnauthorized(text="Invalid password")
-    token = secrets.token_urlsafe(32); _sessions.add(token)
-    response = web.HTTPFound("/admin"); response.set_cookie("elsa_admin", token, httponly=True, samesite="Lax", max_age=86400); raise response
+    if not MOVIE_ADMIN_PASSWORD or data.get("password") != MOVIE_ADMIN_PASSWORD:
+        raise web.HTTPUnauthorized(text="Invalid password")
+    response = web.HTTPFound("/admin")
+    response.set_cookie(_COOKIE_NAME, _session_token(), httponly=True, samesite="Lax", max_age=_SESSION_TTL, secure=True)
+    raise response
 
 
 async def logout(request):
-    _sessions.discard(request.cookies.get("elsa_admin")); response = web.HTTPFound("/admin/login"); response.del_cookie("elsa_admin"); raise response
+    response = web.HTTPFound("/admin/login")
+    response.del_cookie(_COOKIE_NAME)
+    raise response
 
 
 async def admin(request):
-    if not admin_ok(request): raise web.HTTPFound("/admin/login")
+    if not admin_ok(request):
+        raise web.HTTPFound("/admin/login")
     movies = await _movies.find({}).sort("created_at", -1).to_list(200)
     rows = ''.join(f'<tr><td><b>{esc(m.get("title"))}</b><br><small>{esc(m.get("status"))} • {esc(m.get("release_date"))}</small></td><td><a class="btn secondary" href="/admin/movie/{m["_id"]}">Edit</a> <form style="display:inline" method="post" action="/admin/movie/{m["_id"]}/delete"><button class="danger" onclick="return confirm(\'Delete this movie?\')">Delete</button></form></td></tr>' for m in movies)
     body = f'<div class="adminbox"><h1>🎬 Movie Admin</h1><p>Add, edit or delete movies shown publicly.</p>{form()}</div><div class="adminbox"><h2>Movies ({len(movies)})</h2><div class="tablewrap"><table><tr><th>Movie</th><th>Actions</th></tr>{rows}</table></div><br><a class="btn secondary" href="/admin/logout">Logout</a></div>'
@@ -87,24 +122,37 @@ async def admin(request):
 
 
 async def edit_page(request):
-    if not admin_ok(request): raise web.HTTPFound("/admin/login")
-    try: m = await _movies.find_one({"_id": ObjectId(request.match_info["id"])})
-    except Exception: m = None
-    if not m: raise web.HTTPNotFound(text="Movie not found")
+    if not admin_ok(request):
+        raise web.HTTPFound("/admin/login")
+    try:
+        m = await _movies.find_one({"_id": ObjectId(request.match_info["id"])})
+    except Exception:
+        m = None
+    if not m:
+        raise web.HTTPNotFound(text="Movie not found")
     return web.Response(text=page("Edit Movie", f'<div class="adminbox"><h1>✏️ Edit Movie</h1>{form(m)}</div>'), content_type="text/html")
 
 
 async def save(request, movie_id=None):
-    if not admin_ok(request): raise web.HTTPFound("/admin/login")
-    d = await request.post(); movie = {"title":str(d.get("title","")).strip(),"poster":str(d.get("poster","")).strip(),"release_date":str(d.get("release_date","")).strip(),"language":str(d.get("language","")).strip(),"genre":str(d.get("genre","")).strip(),"status":"released" if d.get("status")=="released" else "coming_soon","description":str(d.get("description","")).strip(),"updated_at":datetime.utcnow()}
-    if not movie["title"]: raise web.HTTPBadRequest(text="Title is required")
-    if movie_id: await _movies.update_one({"_id":ObjectId(movie_id)},{"$set":movie})
-    else: movie["created_at"] = datetime.utcnow(); await _movies.insert_one(movie)
+    if not admin_ok(request):
+        raise web.HTTPFound("/admin/login")
+    d = await request.post()
+    movie = {"title": str(d.get("title", "")).strip(), "poster": str(d.get("poster", "")).strip(), "release_date": str(d.get("release_date", "")).strip(), "language": str(d.get("language", "")).strip(), "genre": str(d.get("genre", "")).strip(), "status": "released" if d.get("status") == "released" else "coming_soon", "description": str(d.get("description", "")).strip(), "updated_at": datetime.utcnow()}
+    if not movie["title"]:
+        raise web.HTTPBadRequest(text="Title is required")
+    if movie_id:
+        await _movies.update_one({"_id": ObjectId(movie_id)}, {"$set": movie})
+    else:
+        movie["created_at"] = datetime.utcnow()
+        await _movies.insert_one(movie)
     raise web.HTTPFound("/admin")
 
 
 async def delete(request):
-    if not admin_ok(request): raise web.HTTPFound("/admin/login")
-    try: await _movies.delete_one({"_id":ObjectId(request.match_info["id"])})
-    except Exception: pass
+    if not admin_ok(request):
+        raise web.HTTPFound("/admin/login")
+    try:
+        await _movies.delete_one({"_id": ObjectId(request.match_info["id"])})
+    except Exception:
+        pass
     raise web.HTTPFound("/admin")
