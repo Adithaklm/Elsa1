@@ -34,8 +34,7 @@ def _session_token():
     return f"{payload}.{signature}"
 
 
-def admin_ok(request):
-    token = request.cookies.get(_COOKIE_NAME, "")
+def _valid_token(token):
     if not MOVIE_ADMIN_PASSWORD or not token:
         return False
     try:
@@ -49,6 +48,10 @@ def admin_ok(request):
         return hmac.compare_digest(signature, expected)
     except (ValueError, TypeError):
         return False
+
+
+def admin_ok(request):
+    return _valid_token(request.cookies.get(_COOKIE_NAME, "")) or _valid_token(request.query.get("auth", ""))
 
 
 def page(title, body):
@@ -104,8 +107,9 @@ async def login(request):
     data = await request.post()
     if not MOVIE_ADMIN_PASSWORD or not hmac.compare_digest(str(data.get("password", "")), MOVIE_ADMIN_PASSWORD):
         raise web.HTTPUnauthorized(text="Invalid password")
-    response = web.HTTPFound("/admin")
-    response.set_cookie(_COOKIE_NAME, _session_token(), max_age=_SESSION_TTL, httponly=True, samesite="Lax", secure=False, path="/")
+    token = _session_token()
+    response = web.HTTPFound(f"/admin?auth={token}")
+    response.set_cookie(_COOKIE_NAME, token, max_age=_SESSION_TTL, httponly=True, samesite="Lax", secure=False, path="/")
     raise response
 
 
