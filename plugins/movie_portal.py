@@ -18,6 +18,7 @@ _posters = _client[DATABASE_NAME].movie_portal_posters
 _SESSION_TTL = 86400
 _COOKIE_NAME = "elsa_admin"
 _MAX_POSTER_SIZE = 8 * 1024 * 1024
+_ALLOWED_POSTERS = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
 
 
 def esc(value, quote=False):
@@ -63,13 +64,13 @@ def _auth_url(token, path):
 
 def page(title, body):
     return f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)} • Elsa Movies</title><style>
-:root{{--bg:#07090f;--card:#111522;--muted:#9aa3b2;--text:#f5f7fb;--accent:#ff3158;--line:#252b3a;--green:#31d17c}}*{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at top,#181c30,#07090f 48%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}}a{{color:inherit;text-decoration:none}}.wrap{{max-width:1150px;margin:auto;padding:18px}}nav{{display:flex;justify-content:space-between;align-items:center;padding:8px 0 24px}}.brand{{font-size:21px;font-weight:900}}.brand b{{color:var(--accent)}}.links{{display:flex;gap:18px;color:#cbd2df;font-size:14px}}h1{{font-size:clamp(36px,6vw,64px);line-height:1;margin:25px 0 12px}}h2{{margin-top:30px}}p{{color:var(--muted);line-height:1.6}}.search{{display:flex;gap:10px;margin:25px 0}}input,select,textarea{{width:100%;background:#0d111b;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:11px;font:inherit}}input[type=file]{{padding:9px}}textarea{{min-height:100px}}button,.btn{{border:0;border-radius:11px;padding:11px 15px;background:var(--accent);color:white;font-weight:800;cursor:pointer;display:inline-block}}button:disabled{{opacity:.6;cursor:wait}}.secondary{{background:#202635}}.danger{{background:#b82747}}.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:15px}}.card{{background:rgba(17,21,34,.92);border:1px solid var(--line);border-radius:15px;overflow:hidden}}.poster{{aspect-ratio:2/3;background:#0c1018}}.poster img{{width:100%;height:100%;object-fit:cover}}.info{{padding:11px}}.title{{font-weight:800;line-height:1.25}}.meta{{font-size:12px;color:var(--muted);margin-top:7px}}.badge{{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;background:#252b39;font-size:10px;font-weight:900}}.released{{background:#103122;color:var(--green)}}.soon{{background:#351520;color:#ff7890}}.detail,.adminbox{{background:rgba(17,21,34,.94);border:1px solid var(--line);border-radius:17px;padding:20px;margin-top:25px}}.detail{{display:grid;grid-template-columns:260px 1fr;gap:25px}}.detail .poster{{border-radius:14px;overflow:hidden}}.formgrid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}label{{font-size:12px;color:#adb5c3}}label input,label select,label textarea{{margin-top:5px}}.full{{grid-column:1/-1}}.uploadbox{{border:1px dashed #3b4355;border-radius:12px;padding:12px;margin-top:5px}}.uploadrow{{display:flex;gap:10px;align-items:center}}.uploadrow input[type=file]{{flex:1}}.preview{{width:120px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;margin-top:10px;border:1px solid var(--line)}}.uploadstatus{{margin:8px 0 0;color:var(--muted);font-size:12px}}table{{width:100%;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left}}.tablewrap{{overflow:auto}}@media(max-width:650px){{.grid{{grid-template-columns:repeat(2,1fr);gap:9px}}.detail{{grid-template-columns:1fr}}.formgrid{{grid-template-columns:1fr}}.full{{grid-column:auto}}.search{{flex-direction:column}}.uploadrow{{flex-direction:column;align-items:stretch}}}}
+:root{{--bg:#07090f;--card:#111522;--muted:#9aa3b2;--text:#f5f7fb;--accent:#ff3158;--line:#252b3a;--green:#31d17c}}*{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at top,#181c30,#07090f 48%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}}a{{color:inherit;text-decoration:none}}.wrap{{max-width:1150px;margin:auto;padding:18px}}nav{{display:flex;justify-content:space-between;align-items:center;padding:8px 0 24px}}.brand{{font-size:21px;font-weight:900}}.brand b{{color:var(--accent)}}.links{{display:flex;gap:18px;color:#cbd2df;font-size:14px}}h1{{font-size:clamp(36px,6vw,64px);line-height:1;margin:25px 0 12px}}h2{{margin-top:30px}}p{{color:var(--muted);line-height:1.6}}.search{{display:flex;gap:10px;margin:25px 0}}input,select,textarea{{width:100%;background:#0d111b;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:11px;font:inherit}}input[type=file]{{padding:9px}}textarea{{min-height:100px}}button,.btn{{border:0;border-radius:11px;padding:11px 15px;background:var(--accent);color:white;font-weight:800;cursor:pointer;display:inline-block}}button:disabled{{opacity:.6;cursor:wait}}.secondary{{background:#202635}}.danger{{background:#b82747}}.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:15px}}.card{{background:rgba(17,21,34,.92);border:1px solid var(--line);border-radius:15px;overflow:hidden}}.poster{{aspect-ratio:2/3;background:#0c1018;display:flex;align-items:center;justify-content:center}}.poster img{{width:100%;height:100%;object-fit:cover}}.poster-empty{{color:#566075;font-size:13px}}.info{{padding:11px}}.title{{font-weight:800;line-height:1.25}}.meta{{font-size:12px;color:var(--muted);margin-top:7px}}.badge{{display:inline-block;margin-top:8px;padding:5px 8px;border-radius:999px;background:#252b39;font-size:10px;font-weight:900}}.released{{background:#103122;color:var(--green)}}.soon{{background:#351520;color:#ff7890}}.detail,.adminbox{{background:rgba(17,21,34,.94);border:1px solid var(--line);border-radius:17px;padding:20px;margin-top:25px}}.detail{{display:grid;grid-template-columns:260px 1fr;gap:25px}}.detail .poster{{border-radius:14px;overflow:hidden}}.formgrid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}label{{font-size:12px;color:#adb5c3}}label input,label select,label textarea{{margin-top:5px}}.full{{grid-column:1/-1}}.uploadbox{{border:1px dashed #3b4355;border-radius:12px;padding:12px;margin-top:5px}}.uploadrow{{display:flex;gap:10px;align-items:center}}.uploadrow input[type=file]{{flex:1}}.preview{{width:120px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;margin-top:10px;border:1px solid var(--line)}}.uploadstatus{{margin:8px 0 0;color:var(--muted);font-size:12px}}table{{width:100%;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left}}.tablewrap{{overflow:auto}}@media(max-width:650px){{.grid{{grid-template-columns:repeat(2,1fr);gap:9px}}.detail{{grid-template-columns:1fr}}.formgrid{{grid-template-columns:1fr}}.full{{grid-column:auto}}.search{{flex-direction:column}}.uploadrow{{flex-direction:column;align-items:stretch}}}}
 </style></head><body><div class="wrap"><nav><a class="brand" href="/">🎬 <b>ELSA</b> MOVIES</a><div class="links"><a href="/">Home</a><a href="/admin">Admin</a></div></nav>{body}</div></body></html>'''
 
 
 def card(m):
     poster = esc(m.get("poster"), True)
-    img = f'<img src="{poster}" alt="{esc(m.get("title"), True)}" loading="lazy">' if poster else ''
+    img = f'<img src="{poster}" alt="{esc(m.get("title"), True)}" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"> <span class="poster-empty" style="display:none">Poster unavailable</span>' if poster else '<span class="poster-empty">No poster</span>'
     status = m.get("status", "released")
     badge = "NOW RELEASED" if status == "released" else "COMING SOON"
     cls = "released" if status == "released" else "soon"
@@ -95,15 +96,29 @@ async def detail(request):
     if not movie:
         raise web.HTTPNotFound(text="Movie not found")
     poster = esc(movie.get("poster"), True)
-    poster_html = f'<img src="{poster}" alt="{esc(movie.get("title"), True)}">' if poster else ''
+    poster_html = f'<img src="{poster}" alt="{esc(movie.get("title"), True)}" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"> <span class="poster-empty" style="display:none">Poster unavailable</span>' if poster else '<span class="poster-empty">No poster</span>'
     body = f'<div class="detail"><div class="poster">{poster_html}</div><div><h1>{esc(movie.get("title"))}</h1><p>{esc(movie.get("language"))} • {esc(movie.get("genre"))} • {esc(movie.get("release_date"))}</p><p>{esc(movie.get("description"))}</p></div></div>'
     return web.Response(text=page(movie.get("title", "Movie"), body), content_type="text/html")
+
+
+async def _store_poster(data, filename, content_type):
+    if not data:
+        raise ValueError("Empty poster")
+    if len(data) > _MAX_POSTER_SIZE:
+        raise ValueError("Poster must be 8 MB or smaller")
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    expected = _ALLOWED_POSTERS.get(ext)
+    if not expected or content_type != expected:
+        raise ValueError("Only JPG/JPEG and PNG posters are allowed")
+    poster_id = secrets.token_urlsafe(18)
+    await _posters.insert_one({"_id": poster_id, "content_type": expected, "data": bytes(data), "created_at": datetime.utcnow()})
+    return f"/poster/{poster_id}"
 
 
 async def poster_upload(request):
     auth = request.query.get("auth", "")
     if not admin_ok(request, auth):
-        if request.headers.get("Accept", "").lower().find("application/json") >= 0:
+        if "application/json" in request.headers.get("Accept", "").lower():
             return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
         raise web.HTTPFound("/admin/login")
     reader = await request.multipart()
@@ -112,10 +127,6 @@ async def poster_upload(request):
         return web.json_response({"ok": False, "error": "Poster file is required"}, status=400)
     filename = field.filename or "poster.jpg"
     content_type = (field.headers.get("Content-Type") or "").lower()
-    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    allowed = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
-    if ext not in allowed or content_type != allowed[ext]:
-        return web.json_response({"ok": False, "error": "Only JPG/JPEG and PNG posters are allowed"}, status=400)
     data = bytearray()
     while True:
         chunk = await field.read_chunk(1024 * 1024)
@@ -124,19 +135,21 @@ async def poster_upload(request):
         data.extend(chunk)
         if len(data) > _MAX_POSTER_SIZE:
             return web.json_response({"ok": False, "error": "Poster must be 8 MB or smaller"}, status=413)
-    if not data:
-        return web.json_response({"ok": False, "error": "Empty poster"}, status=400)
-    poster_id = secrets.token_urlsafe(18)
-    await _posters.insert_one({"_id": poster_id, "content_type": allowed[ext], "data": bytes(data), "created_at": datetime.utcnow()})
-    return web.json_response({"ok": True, "poster": f"/poster/{poster_id}"})
+    try:
+        poster_url = await _store_poster(data, filename, content_type)
+    except ValueError as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+    return web.json_response({"ok": True, "poster": poster_url})
 
 
 async def poster_file(request):
     poster_id = request.match_info["id"]
     poster = await _posters.find_one({"_id": poster_id})
-    if not poster:
+    if not poster or not poster.get("data"):
         raise web.HTTPNotFound(text="Poster not found")
-    return web.Response(body=poster["data"], content_type=poster.get("content_type", "image/jpeg"), headers={"Cache-Control": "public, max-age=86400"})
+    data = bytes(poster["data"])
+    content_type = poster.get("content_type") or "image/jpeg"
+    return web.Response(body=data, content_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
 
 
 def form(m=None, auth=""):
@@ -154,36 +167,37 @@ const uploadBtn=document.getElementById('uploadPosterBtn');
 const posterHidden=document.getElementById('posterHidden');
 const preview=document.getElementById('posterPreview');
 const status=document.getElementById('uploadStatus');
+async function uploadPoster(){{
+  const file=posterInput.files[0];
+  if(!file){{status.textContent='Please choose a JPG, JPEG or PNG file first.';return false;}}
+  if(file.size>{_MAX_POSTER_SIZE}){{status.textContent='Poster must be 8 MB or smaller.';return false;}}
+  uploadBtn.disabled=true; status.textContent='Uploading poster...';
+  try{{
+    const fd=new FormData(); fd.append('poster',file);
+    const res=await fetch('{upload_url}',{{method:'POST',body:fd,headers:{{'Accept':'application/json'}}}});
+    const data=await res.json();
+    if(!res.ok||!data.ok) throw new Error(data.error||'Upload failed');
+    posterHidden.value=data.poster;
+    preview.src=data.poster; preview.style.display='block';
+    status.textContent='✅ Poster uploaded successfully.';
+    return true;
+  }}catch(err){{status.textContent='❌ '+err.message;return false;}}
+  finally{{uploadBtn.disabled=false;}}
+}}
 if(posterInput){{
   posterInput.addEventListener('change',()=>{{
     const file=posterInput.files[0];
     if(file){{
       preview.src=URL.createObjectURL(file); preview.style.display='block';
-      status.textContent=file.name+' selected. Click Upload Poster.';
+      status.textContent='Uploading '+file.name+'...';
+      uploadPoster();
     }}
   }});
 }}
-if(uploadBtn){{
-  uploadBtn.addEventListener('click',async()=>{{
-    const file=posterInput.files[0];
-    if(!file){{status.textContent='Please choose a JPG, JPEG or PNG file first.';return;}}
-    if(file.size>{_MAX_POSTER_SIZE}){{status.textContent='Poster must be 8 MB or smaller.';return;}}
-    uploadBtn.disabled=true; status.textContent='Uploading poster...';
-    try{{
-      const fd=new FormData(); fd.append('poster',file);
-      const res=await fetch('{upload_url}',{{method:'POST',body:fd,headers:{{'Accept':'application/json'}}}});
-      const data=await res.json();
-      if(!res.ok||!data.ok) throw new Error(data.error||'Upload failed');
-      posterHidden.value=data.poster;
-      preview.src=data.poster; preview.style.display='block';
-      status.textContent='✅ Poster uploaded. Now click Save Movie.';
-    }}catch(err){{status.textContent='❌ '+err.message;}}
-    finally{{uploadBtn.disabled=false;}}
-  }});
-}}
+if(uploadBtn) uploadBtn.addEventListener('click',uploadPoster);
 </script>'''
-    upload_box = f'''<div class="uploadbox"><b>📤 Upload Poster</b><p style="margin:6px 0">JPG/JPEG or PNG • Max 8 MB</p><div class="uploadrow"><input id="posterFile" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png"><button id="uploadPosterBtn" type="button">Upload Poster</button></div><div id="uploadStatus" class="uploadstatus">Choose a poster and upload it here.</div>{preview}</div>'''
-    return f'''<form method="post" action="{action}" class="formgrid">{hidden}<input id="posterHidden" type="hidden" name="poster" value="{esc(poster_value, True)}"><label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label><label>Poster{upload_box}</label><label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button type="submit">💾 Save Movie</button> <a class="btn secondary" href="{_auth_url(auth, '/admin')}">Cancel</a></div></form>{script}'''
+    upload_box = f'''<div class="uploadbox"><b>📤 Upload Poster</b><p style="margin:6px 0">JPG/JPEG or PNG • Max 8 MB</p><div class="uploadrow"><input id="posterFile" name="poster_file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png"><button id="uploadPosterBtn" type="button">Upload Poster</button></div><div id="uploadStatus" class="uploadstatus">Choose a poster. Upload starts automatically.</div>{preview}</div>'''
+    return f'''<form method="post" action="{action}" enctype="multipart/form-data" class="formgrid">{hidden}<input id="posterHidden" type="hidden" name="poster" value="{esc(poster_value, True)}"><label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label><label>Poster{upload_box}</label><label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button type="submit">💾 Save Movie</button> <a class="btn secondary" href="{_auth_url(auth, '/admin')}">Cancel</a></div></form>{script}'''
 
 
 async def login(request):
@@ -237,7 +251,19 @@ async def save(request):
     auth = str(d.get("auth", "")) or request.query.get("auth", "")
     if not admin_ok(request, auth):
         raise web.HTTPFound("/admin/login")
-    movie = {"title": str(d.get("title", "")).strip(), "poster": str(d.get("poster", "")).strip(), "release_date": str(d.get("release_date", "")).strip(), "language": str(d.get("language", "")).strip(), "genre": str(d.get("genre", "")).strip(), "status": "released" if d.get("status") == "released" else "coming_soon", "description": str(d.get("description", "")).strip(), "updated_at": datetime.utcnow()}
+
+    poster_url = str(d.get("poster", "")).strip()
+    poster_file = d.get("poster_file")
+    if not poster_url and poster_file is not None and hasattr(poster_file, "file"):
+        raw = poster_file.file.read(_MAX_POSTER_SIZE + 1)
+        filename = getattr(poster_file, "filename", "poster.jpg") or "poster.jpg"
+        content_type = (getattr(poster_file, "content_type", "") or "").lower()
+        try:
+            poster_url = await _store_poster(raw, filename, content_type)
+        except ValueError as e:
+            raise web.HTTPBadRequest(text=str(e))
+
+    movie = {"title": str(d.get("title", "")).strip(), "poster": poster_url, "release_date": str(d.get("release_date", "")).strip(), "language": str(d.get("language", "")).strip(), "genre": str(d.get("genre", "")).strip(), "status": "released" if d.get("status") == "released" else "coming_soon", "description": str(d.get("description", "")).strip(), "updated_at": datetime.utcnow()}
     if not movie["title"]:
         raise web.HTTPBadRequest(text="Title is required")
     movie_id = request.match_info.get("id")
