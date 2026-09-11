@@ -50,8 +50,13 @@ def _valid_token(token):
         return False
 
 
-def admin_ok(request):
-    return _valid_token(request.cookies.get(_COOKIE_NAME, "")) or _valid_token(request.query.get("auth", ""))
+def admin_ok(request, token=None):
+    token = token or request.cookies.get(_COOKIE_NAME, "") or request.query.get("auth", "")
+    return _valid_token(token)
+
+
+def _auth_url(token, path):
+    return f"{path}?auth={token}" if token else path
 
 
 def page(title, body):
@@ -93,12 +98,13 @@ async def detail(request):
     return web.Response(text=page(movie.get("title", "Movie"), body), content_type="text/html")
 
 
-def form(m=None):
+def form(m=None, auth=""):
     m = m or {}
     mid = str(m.get("_id", ""))
     action = f"/admin/movie/{mid}/save" if mid else "/admin/movie/save"
     r = m.get("status", "coming_soon")
-    return f'''<form method="post" action="{action}" class="formgrid"><label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label><label>Poster URL<input name="poster" value="{esc(m.get("poster"), True)}"></label><label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button>💾 Save Movie</button> <a class="btn secondary" href="/admin">Cancel</a></div></form>'''
+    hidden = f'<input type="hidden" name="auth" value="{esc(auth, True)}">' if auth else ''
+    return f'''<form method="post" action="{action}" class="formgrid">{hidden}<label>Title<input name="title" required value="{esc(m.get("title"), True)}"></label><label>Poster URL<input name="poster" value="{esc(m.get("poster"), True)}"></label><label>Release date<input type="date" name="release_date" value="{esc(m.get("release_date"), True)}"></label><label>Language<input name="language" value="{esc(m.get("language"), True)}"></label><label>Genre<input name="genre" value="{esc(m.get("genre"), True)}"></label><label>Status<select name="status"><option value="released" {"selected" if r=="released" else ""}>Now Released</option><option value="coming_soon" {"selected" if r!="released" else ""}>Coming Soon</option></select></label><label class="full">Description<textarea name="description">{esc(m.get("description"))}</textarea></label><div class="full"><button>💾 Save Movie</button> <a class="btn secondary" href="{_auth_url(auth, '/admin')}">Cancel</a></div></form>'''
 
 
 async def login(request):
@@ -120,16 +126,18 @@ async def logout(request):
 
 
 async def admin(request):
-    if not admin_ok(request):
+    auth = request.query.get("auth", "")
+    if not admin_ok(request, auth):
         raise web.HTTPFound("/admin/login")
     movies = await _movies.find({}).sort("created_at", -1).to_list(200)
-    rows = ''.join(f'<tr><td><b>{esc(m.get("title"))}</b><br><small>{esc(m.get("status"))} • {esc(m.get("release_date"))}</small></td><td><a class="btn secondary" href="/admin/movie/{m["_id"]}">Edit</a> <form style="display:inline" method="post" action="/admin/movie/{m["_id"]}/delete"><button class="danger" onclick="return confirm(\'Delete this movie?\')">Delete</button></form></td></tr>' for m in movies)
-    body = f'<div class="adminbox"><h1>🎬 Movie Admin</h1><p>Add, edit or delete movies shown publicly.</p>{form()}</div><div class="adminbox"><h2>Movies ({len(movies)})</h2><div class="tablewrap"><table><tr><th>Movie</th><th>Actions</th></tr>{rows}</table></div><br><a class="btn secondary" href="/admin/logout">Logout</a></div>'
+    rows = ''.join(f'<tr><td><b>{esc(m.get("title"))}</b><br><small>{esc(m.get("status"))} • {esc(m.get("release_date"))}</small></td><td><a class="btn secondary" href="{_auth_url(auth, f"/admin/movie/{m[\"_id\"]}")}">Edit</a> <form style="display:inline" method="post" action="/admin/movie/{m["_id"]}/delete"><input type="hidden" name="auth" value="{esc(auth, True)}"><button class="danger" onclick="return confirm(\'Delete this movie?\')">Delete</button></form></td></tr>' for m in movies)
+    body = f'<div class="adminbox"><h1>🎬 Movie Admin</h1><p>Add, edit or delete movies shown publicly.</p>{form(auth=auth)}</div><div class="adminbox"><h2>Movies ({len(movies)})</h2><div class="tablewrap"><table><tr><th>Movie</th><th>Actions</th></tr>{rows}</table></div><br><a class="btn secondary" href="/admin/logout">Logout</a></div>'
     return web.Response(text=page("Admin", body), content_type="text/html")
 
 
 async def edit_page(request):
-    if not admin_ok(request):
+    auth = request.query.get("auth", "")
+    if not admin_ok(request, auth):
         raise web.HTTPFound("/admin/login")
     try:
         m = await _movies.find_one({"_id": ObjectId(request.match_info["id"])})
@@ -137,13 +145,14 @@ async def edit_page(request):
         m = None
     if not m:
         raise web.HTTPNotFound(text="Movie not found")
-    return web.Response(text=page("Edit Movie", f'<div class="adminbox"><h1>✏️ Edit Movie</h1>{form(m)}</div>'), content_type="text/html")
+    return web.Response(text=page("Edit Movie", f'<div class="adminbox"><h1>✏️ Edit Movie</h1>{form(m, auth)}</div>'), content_type="text/html")
 
 
 async def save(request, movie_id=None):
-    if not admin_ok(request):
-        raise web.HTTPFound("/admin/login")
     d = await request.post()
+    auth = str(d.get("auth", "")) or request.query.get("auth", "")
+    if not admin_ok(request, auth):
+        raise web.HTTPFound("/admin/login")
     movie = {"title": str(d.get("title", "")).strip(), "poster": str(d.get("poster", "")).strip(), "release_date": str(d.get("release_date", "")).strip(), "language": str(d.get("language", "")).strip(), "genre": str(d.get("genre", "")).strip(), "status": "released" if d.get("status") == "released" else "coming_soon", "description": str(d.get("description", "")).strip(), "updated_at": datetime.utcnow()}
     if not movie["title"]:
         raise web.HTTPBadRequest(text="Title is required")
@@ -152,14 +161,16 @@ async def save(request, movie_id=None):
     else:
         movie["created_at"] = datetime.utcnow()
         await _movies.insert_one(movie)
-    raise web.HTTPFound("/admin")
+    raise web.HTTPFound(_auth_url(auth, "/admin"))
 
 
 async def delete(request):
-    if not admin_ok(request):
+    d = await request.post()
+    auth = str(d.get("auth", "")) or request.query.get("auth", "")
+    if not admin_ok(request, auth):
         raise web.HTTPFound("/admin/login")
     try:
         await _movies.delete_one({"_id": ObjectId(request.match_info["id"])})
     except Exception:
         pass
-    raise web.HTTPFound("/admin")
+    raise web.HTTPFound(_auth_url(auth, "/admin"))
