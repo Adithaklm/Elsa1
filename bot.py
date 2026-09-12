@@ -41,19 +41,35 @@ class Bot(Client):
         temp.BANNED_CHATS = b_chats
         await super().start()
 
-        # Warm up the FILE_CHANNEL peer immediately after restart.
-        # Without this, a fresh Pyrogram session may not know the numeric
-        # channel peer until it receives an update from that channel. This
-        # caused the first file request after restart to fail with
-        # "Peer id invalid", while later requests worked after channel activity.
+        # A fresh Pyrogram session may not have the numeric FILE_CHANNEL peer
+        # in its local storage. Calling get_chat(FILE_CHANNEL) directly is
+        # not enough in that situation because resolve_peer() needs the peer
+        # to already be known. get_dialogs() fetches the bot's dialogs and
+        # populates Pyrogram's peer storage, which fixes the first request
+        # after restart without requiring a new message in FILE_CHANNEL.
         if FILE_CHANNEL:
             try:
-                file_channel = await self.get_chat(FILE_CHANNEL)
-                logging.info(
-                    "FILE_CHANNEL peer warmed: %s (%s)",
-                    getattr(file_channel, "title", None) or getattr(file_channel, "username", None),
-                    FILE_CHANNEL,
-                )
+                warmed = False
+                async for dialog in self.get_dialogs():
+                    chat = getattr(dialog, "chat", None)
+                    if chat and chat.id == FILE_CHANNEL:
+                        logging.info(
+                            "FILE_CHANNEL peer warmed from dialogs: %s (%s)",
+                            getattr(chat, "title", None) or getattr(chat, "username", None),
+                            FILE_CHANNEL,
+                        )
+                        warmed = True
+                        break
+
+                if not warmed:
+                    # Try once more after dialogs in case the peer was already
+                    # inserted into storage by another startup operation.
+                    file_channel = await self.get_chat(FILE_CHANNEL)
+                    logging.info(
+                        "FILE_CHANNEL peer warmed directly: %s (%s)",
+                        getattr(file_channel, "title", None) or getattr(file_channel, "username", None),
+                        FILE_CHANNEL,
+                    )
             except Exception as e:
                 logging.exception("FILE_CHANNEL peer warm-up failed for %s: %s", FILE_CHANNEL, e)
 
@@ -93,12 +109,12 @@ class Bot(Client):
             chat_id (``int`` | ``str``):
                 Unique identifier (int) or username (str) of the target chat.
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
-                For a contact that exists in your Telegram address book you can use his phone number (str).
+                For a contact that exists in your Telegram address book you can simply use his phone number (str).
                 
             ``limit`` (``int``):
                 Identifier of the last message to be returned.
                 
-            offset (``int``, *optional*):
+            ``offset`` (``int``, optional):
                 Identifier of the first message to be returned.
                 Defaults to 0.
         Returns:
