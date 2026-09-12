@@ -12,7 +12,7 @@ from pyrogram import Client, __version__, filters
 from pyrogram.raw.all import layer
 from database.ia_filterdb import Media
 from database.users_chats_db import db
-from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL, PORT
+from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL, PORT, FILE_CHANNEL
 from utils import temp
 from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
@@ -40,6 +40,23 @@ class Bot(Client):
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
         await super().start()
+
+        # Warm up the FILE_CHANNEL peer immediately after restart.
+        # Without this, a fresh Pyrogram session may not know the numeric
+        # channel peer until it receives an update from that channel. This
+        # caused the first file request after restart to fail with
+        # "Peer id invalid", while later requests worked after channel activity.
+        if FILE_CHANNEL:
+            try:
+                file_channel = await self.get_chat(FILE_CHANNEL)
+                logging.info(
+                    "FILE_CHANNEL peer warmed: %s (%s)",
+                    getattr(file_channel, "title", None) or getattr(file_channel, "username", None),
+                    FILE_CHANNEL,
+                )
+            except Exception as e:
+                logging.exception("FILE_CHANNEL peer warm-up failed for %s: %s", FILE_CHANNEL, e)
+
         await Media.ensure_indexes()
         me = await self.get_me()
         temp.ME = me.id
@@ -78,7 +95,7 @@ class Bot(Client):
                 For your personal cloud (Saved Messages) you can simply use "me" or "self".
                 For a contact that exists in your Telegram address book you can use his phone number (str).
                 
-            limit (``int``):
+            ``limit`` (``int``):
                 Identifier of the last message to be returned.
                 
             offset (``int``, *optional*):
